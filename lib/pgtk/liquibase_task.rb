@@ -20,13 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-require 'cgi'
 require 'English'
 require 'rake'
 require 'rake/tasklib'
-require 'random-port'
 require 'shellwords'
-require 'tempfile'
 require 'yaml'
 require_relative '../pgtk'
 

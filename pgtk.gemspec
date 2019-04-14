@@ -46,6 +46,7 @@ Gem::Specification.new do |s|
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
   s.add_runtime_dependency 'backtrace', '~> 0.3'
+  s.add_runtime_dependency 'pg', '1.1.3'
   s.add_runtime_dependency 'random-port', '~> 0.3'
   s.add_development_dependency 'codecov', '0.1.10'
   s.add_development_dependency 'minitest', '5.5.0'

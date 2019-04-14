@@ -108,7 +108,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       raise if attempt > 10
       retry
     end
-    IO.write(@port, port.to_s)
     IO.write(
       @yaml,
       {

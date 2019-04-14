@@ -46,7 +46,6 @@ Pgtk::PgsqlTask.new :pgsql do |t|
   t.user = 'test'
   t.password = 'test'
   t.dbname = 'test'
-  t.port = 'target/pgsql.port' # File to be created with TCP port number inside
   t.yaml = 'target/config.yml' # YAML file to be created with connection details
 end
 ```
@@ -60,6 +59,11 @@ Pgtk::LiquibaseTask.new :liquibase do |t|
   t.yaml = 'target/config.yml' # YAML file with connection details
 end
 ```
+
+You should create that `liquibase/master.xml` file in your repository,
+and a number of other XML files with Liquibase changes. This
+[example](https://github.com/zold-io/wts.zold.io/tree/master/liquibase)
+will help you understand them.
 
 Now, you can do this:
 
@@ -76,6 +80,7 @@ From inside your app you may find this class useful:
 ```ruby
 require 'pgtk/pool'
 pgsql = Pgtk::Pool.new
+pgsql.start(5) # Start it with five simultaneous connections
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
 

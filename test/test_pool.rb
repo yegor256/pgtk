@@ -25,26 +25,44 @@ require 'tmpdir'
 require 'rake'
 require 'yaml'
 require_relative '../lib/pgtk/pgsql_task'
+require_relative '../lib/pgtk/liquibase_task'
+require_relative '../lib/pgtk/pool'
 
-# Pgsql rake task test.
+# Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2017-2018 Yegor Bugayenko
 # License:: MIT
-class TestPgsqlTask < Minitest::Test
+class TestPool < Minitest::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
-      Pgtk::PgsqlTask.new(:p) do |t|
+      Pgtk::PgsqlTask.new(:pgsql) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
-        t.port = File.join(dir, 'port.txt')
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['p'].invoke
+      Rake::Task['pgsql'].invoke
+      Pgtk::LiquibaseTask.new(:liquibase) do |t|
+        t.master = File.join(__dir__, '../test-resources/master.xml')
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = true
+      end
+      Rake::Task['liquibase'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
-      assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
+      pool = Pgtk::Pool.new(
+        port: yaml['pgsql']['port'],
+        dbname: yaml['pgsql']['dbname'],
+        user: yaml['pgsql']['user'],
+        password: yaml['pgsql']['password']
+      )
+      pool.start(1)
+      id = pool.exec(
+        'INSERT INTO book (title) VALUES ($1) RETURNING id',
+        ['Elegant Objects']
+      )[0]['id'].to_i
+      assert(id.positive?)
     end
   end
 end
