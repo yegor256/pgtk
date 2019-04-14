@@ -20,8 +20,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+require 'cgi'
+require 'English'
 require 'rake'
 require 'rake/tasklib'
+require 'random-port'
+require 'shellwords'
+require 'tempfile'
+require 'yaml'
 require_relative '../pgtk'
 
 # Pgsql rake task.
@@ -31,11 +37,13 @@ require_relative '../pgtk'
 class Pgtk::PgsqlTask < Rake::TaskLib
   attr_accessor :name
   attr_accessor :dir
+  attr_accessor :fresh_start
   attr_accessor :user
   attr_accessor :password
   attr_accessor :dbname
   attr_accessor :port
   attr_accessor :yaml
+  attr_accessor :quiet
 
   def initialize(*args, &task_block)
     @name = args.shift || :pgsql
@@ -53,6 +61,71 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   private
 
   def run
-    puts 'Do it!...'
+    home = File.expand_path(@dir)
+    FileUtils.rm_rf(home) if @fresh_start
+    if File.exist?(home)
+      raise "Directory/file #{home} is present, use fresh_start=true"
+    end
+    out = "2>&1 #{@quiet ? '>/dev/null' : ''}"
+    Tempfile.open do |pwfile|
+      IO.write(pwfile.path, @password)
+      system(
+        [
+          'initdb --auth=trust',
+          "-D #{Shellwords.escape(home)}",
+          '--username',
+          Shellwords.escape(@user),
+          '--pwfile',
+          Shellwords.escape(pwfile.path),
+          out
+        ].join(' ')
+      )
+    end
+    raise unless $CHILD_STATUS.exitstatus.zero?
+    port = RandomPort::Pool.new.acquire
+    pid = Process.spawn('postgres', '-k', home, '-D', home, "--port=#{port}")
+    at_exit do
+      `kill -TERM #{pid}`
+      puts "PostgreSQL killed in PID #{pid}"
+    end
+    sleep 1
+    attempt = 0
+    begin
+      system(
+        [
+          "createdb -h localhost -p #{port}",
+          '--username',
+          Shellwords.escape(@user),
+          Shellwords.escape(@dbname),
+          out
+        ].join(' ')
+      )
+      raise unless $CHILD_STATUS.exitstatus.zero?
+    rescue StandardError => e
+      puts e.message
+      sleep(5)
+      attempt += 1
+      raise if attempt > 10
+      retry
+    end
+    IO.write(@port, port.to_s)
+    IO.write(
+      @yaml,
+      {
+        'pgsql' => {
+          'host' => 'localhost',
+          'port' => port,
+          'dbname' => @dbname,
+          'user' => @user,
+          'password' => @password,
+          'url' => [
+            "jdbc:postgresql://localhost:#{port}/",
+            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}",
+            "&password=#{CGI.escape(@password)}"
+          ].join
+        }
+      }.to_yaml
+    )
+    puts "PostgreSQL is running in PID #{pid}"
   end
 end

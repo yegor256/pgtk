@@ -42,6 +42,7 @@ Then, add this to your [`Rakefile`](https://github.com/ruby/rake/blob/master/doc
 require 'pgtk/pgsql_task'
 Pgtk::PgsqlTask.new :pgsql do |t|
   t.dir = 'target/pgsql' # Temp directory with PostgreSQL files
+  t.fresh_start = true # To delete the directory on every start
   t.user = 'test'
   t.password = 'test'
   t.dbname = 'test'

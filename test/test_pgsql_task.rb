@@ -23,6 +23,7 @@
 require 'minitest/autorun'
 require 'tmpdir'
 require 'rake'
+require 'yaml'
 require_relative '../lib/pgtk/pgsql_task'
 
 # Pgsql rake task test.
@@ -32,11 +33,19 @@ require_relative '../lib/pgtk/pgsql_task'
 class TestPgsqlTask < Minitest::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
-      Dir.chdir(dir)
       Pgtk::PgsqlTask.new(:p) do |t|
-        t.dir = dir
+        t.dir = File.join(dir, 'pgsql')
+        t.user = 'hello'
+        t.password = 'A B C привет ! & | !'
+        t.dbname = 'test'
+        t.port = File.join(dir, 'port.txt')
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = true
       end
       Rake::Task['p'].invoke
+      assert(/^[0-9]+$/.match?(IO.read(File.join(dir, 'port.txt'))))
+      yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
+      assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
     end
   end
 end
