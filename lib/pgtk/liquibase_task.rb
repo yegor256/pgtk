@@ -58,12 +58,14 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     raise "Option 'yaml' is mandatory" unless @yaml
     yml = YAML.load_file(@yaml)
     raise "YAML at #{yaml} is missing 'pgsql' section" unless yml['pgsql']
-    pom = File.expand_path(File.join(__dir__, '../resources/pom.xml'))
+    pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
+    raise "Liquibase master is absent at #{@master}" unless File.exist?(@master)
     Dir.chdir(File.dirname(@master)) do
       system(
         [
           'mvn verify',
           '--errors',
+          '--batch-mode',
           @quiet ? '--quiet' : '',
           '--file',
           Shellwords.escape(pom),
