@@ -11,6 +11,9 @@ install:
   - cmd: SET PATH=C:\Ruby23-x64\bin;%PATH%
   - cmd: ruby --version
   - cmd: git --version
+  - cmd: psql --version
+  - cmd: java -version
+  - cmd: mvn --version
 build_script:
   - bundle update
   - bundle install
