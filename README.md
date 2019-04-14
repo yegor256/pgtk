@@ -9,7 +9,7 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/tbeaa0d4dk38xdb5?svg=true)](https://ci.appveyor.com/project/yegor256/pgtk)
 [![PDD status](http://www.0pdd.com/svg?name=yegor256/pgtk)](http://www.0pdd.com/p?name=yegor256/pgtk)
 [![Gem Version](https://badge.fury.io/rb/pgtk.svg)](http://badge.fury.io/rb/pgtk)
-[![Maintainability](https://api.codeclimate.com/v1/badges/74c909f06d4afa0d8001/maintainability)](https://codeclimate.com/github/yegor256/pgtk/maintainability)
+[![Maintainability](https://api.codeclimate.com/v1/badges/3a5bebac001e5288b00d/maintainability)](https://codeclimate.com/github/yegor256/pgtk/maintainability)
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
 
 This small Ruby gem helps you integrate PostgreSQL with your Ruby
