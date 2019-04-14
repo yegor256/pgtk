@@ -1,5 +1,4 @@
 <img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg" height="64px"/>
-<img src="https://upload.wikimedia.org/wikipedia/commons/7/73/Ruby_logo.svg" height="64px"/>
 
 [![EO principles respected here](http://www.elegantobjects.org/badge.svg)](http://www.elegantobjects.org)
 [![Managed by Zerocracy](https://www.0crat.com/badge/C3RFVLU72.svg)](https://www.0crat.com/p/C3RFVLU72)
@@ -14,7 +13,7 @@
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
 
 This small Ruby gem helps you integrate PostgreSQL with your Ruby
-web app, through Liquibase. It also adds a simple connection pool
+web app, through [Liquibase](https://www.liquibase.org/). It also adds a simple connection pool
 and query processor, to make SQL manipulation simpler.
 
 First of all, on top of
