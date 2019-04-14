@@ -1,0 +1,15 @@
+AllCops:
+  Exclude:
+    - 'bin/**/*'
+    - 'assets/**/*'
+  DisplayCopNames: true
+  TargetRubyVersion: 2.3
+
+Style/ClassAndModuleChildren:
+  Enabled: false
+Layout/EndOfLine:
+  EnforcedStyle: lf
+Metrics/BlockLength:
+  Max: 50
+Layout/EmptyLineAfterGuardClause:
+  Enabled: false
