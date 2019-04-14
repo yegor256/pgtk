@@ -33,16 +33,15 @@ require_relative '../lib/pgtk/pgsql_task'
 class TestPgsqlTask < Minitest::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
-      Pgtk::PgsqlTask.new(:p) do |t|
+      Pgtk::PgsqlTask.new(:p2) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
-        t.port = File.join(dir, 'port.txt')
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['p'].invoke
+      Rake::Task['p2'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
     end

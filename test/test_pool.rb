@@ -35,7 +35,7 @@ require_relative '../lib/pgtk/pool'
 class TestPool < Minitest::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
-      Pgtk::PgsqlTask.new(:pgsql) do |t|
+      Pgtk::PgsqlTask.new(:pgsql1) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
@@ -43,13 +43,13 @@ class TestPool < Minitest::Test
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['pgsql'].invoke
-      Pgtk::LiquibaseTask.new(:liquibase) do |t|
+      Rake::Task['pgsql1'].invoke
+      Pgtk::LiquibaseTask.new(:liquibase1) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['liquibase'].invoke
+      Rake::Task['liquibase1'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       pool = Pgtk::Pool.new(
         port: yaml['pgsql']['port'],

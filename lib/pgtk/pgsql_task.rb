@@ -41,12 +41,16 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   attr_accessor :user
   attr_accessor :password
   attr_accessor :dbname
-  attr_accessor :port
   attr_accessor :yaml
   attr_accessor :quiet
 
   def initialize(*args, &task_block)
     @name = args.shift || :pgsql
+    @fresh_start = false
+    @quite = false
+    @user = 'test'
+    @password = 'test'
+    @dbname = 'test'
     unless ::Rake.application.last_description
       desc 'Start a local PostgreSQL server'
     end
@@ -61,6 +65,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   private
 
   def run
+    raise "Option 'dir' is mandatory" unless @dir
+    raise "Option 'yaml' is mandatory" unless @yaml
     home = File.expand_path(@dir)
     FileUtils.rm_rf(home) if @fresh_start
     if File.exist?(home)

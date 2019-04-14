@@ -34,22 +34,21 @@ require_relative '../lib/pgtk/liquibase_task'
 class TestLiquibaseTask < Minitest::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
-      Pgtk::PgsqlTask.new(:pgsql) do |t|
+      Pgtk::PgsqlTask.new(:pgsql2) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
-        t.port = File.join(dir, 'port.txt')
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['pgsql'].invoke
-      Pgtk::LiquibaseTask.new(:liquibase) do |t|
+      Rake::Task['pgsql2'].invoke
+      Pgtk::LiquibaseTask.new(:liquibase2) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
       end
-      Rake::Task['liquibase'].invoke
+      Rake::Task['liquibase2'].invoke
     end
   end
 end

@@ -39,6 +39,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
 
   def initialize(*args, &task_block)
     @name = args.shift || :liquibase
+    @quite = false
     unless ::Rake.application.last_description
       desc 'Deploy Liquibase changes to the running PostgreSQL server'
     end
@@ -53,6 +54,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   private
 
   def run
+    raise "Option 'master' is mandatory" unless @master
+    raise "Option 'yaml' is mandatory" unless @yaml
     yml = YAML.load_file(@yaml)
     raise "YAML at #{yaml} is missing 'pgsql' section" unless yml['pgsql']
     pom = File.expand_path(File.join(__dir__, '../resources/pom.xml'))

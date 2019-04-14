@@ -54,7 +54,7 @@ And this too:
 
 ```ruby
 require 'pgtk/liquibase_task'
-Pgtk::LiquibaseTask.new :liquibase do |t|
+Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   t.master = 'liquibase/master.xml' # Master XML file path
   t.yaml = 'target/config.yml' # YAML file with connection details
 end
@@ -79,7 +79,13 @@ From inside your app you may find this class useful:
 
 ```ruby
 require 'pgtk/pool'
-pgsql = Pgtk::Pool.new
+yaml = YAML.load_file('target/config.yml')
+pgsql = Pgtk::Pool.new(
+  port: yaml['pgsql']['port'],
+  dbname: yaml['pgsql']['dbname'],
+  user: yaml['pgsql']['user'],
+  password: yaml['pgsql']['password']
+)
 pgsql.start(5) # Start it with five simultaneous connections
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
