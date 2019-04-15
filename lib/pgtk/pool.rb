@@ -32,7 +32,6 @@ class Pgtk::Pool
   def initialize(host: 'localhost', port:, dbname:, user:, password:)
     @host = host
     @port = port
-    @port = port
     @dbname = dbname
     @user = user
     @password = password
