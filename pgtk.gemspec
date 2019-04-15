@@ -36,7 +36,9 @@ Gem::Specification.new do |s|
   s.version = Pgtk::VERSION
   s.license = 'MIT'
   s.summary = 'PostgreSQL ToolKit for Ruby apps'
-  s.description = '...'
+  s.description = 'This small Ruby gem helps you integrate PostgreSQL \
+with your Ruby web app, through Liquibase. It also adds a simple \
+connection pool and query processor, to make SQL manipulation simpler.'
   s.authors = ['Yegor Bugayenko']
   s.email = 'yegor256@gmail.com'
   s.homepage = 'http://github.com/yegor256/pgtk'
@@ -46,7 +48,7 @@ Gem::Specification.new do |s|
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
   s.add_runtime_dependency 'backtrace', '~> 0.3'
-  s.add_runtime_dependency 'pg', '1.1.3'
+  s.add_runtime_dependency 'pg', '~> 1.1'
   s.add_runtime_dependency 'random-port', '~> 0.3'
   s.add_development_dependency 'codecov', '0.1.10'
   s.add_development_dependency 'minitest', '5.5.0'
