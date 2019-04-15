@@ -39,8 +39,13 @@ class Pgtk::Pool
     @pool = Queue.new
   end
 
-  # Start it with a fixed number of connections.
-  def start(max = 1)
+  # Start it with a fixed number of connections. The amount of connections
+  # is specified in +max+ argument and should be big enough to handle
+  # the amount of parallel connections you may have to the database. However,
+  # keep in mind that not all servers will allow you to have many connections
+  # open at the same time. For example, Heroku free PostgreSQL database
+  # allows only one connection open.
+  def start(max = 8)
     max.times do
       @pool << PG.connect(
         dbname: @dbname, host: @host, port: @port,
@@ -50,7 +55,40 @@ class Pgtk::Pool
     self
   end
 
-  # Make a query and return the result as an array of hashes.
+  # Make a query and return the result as an array of hashes. For example,
+  # in order to fetch the list of all books belonging to the user:
+  #
+  #  books = pool.exec('SELECT * FROM book WHERE owner = $1', ['yegor256'])
+  #  books.each do |row|
+  #    puts 'ID: ' + row['id'].to_i
+  #    puts 'Created: ' + Time.parse(row['created'])
+  #    puts 'Title: ' + row['title']
+  #  end
+  #
+  # All values in the retrieved hash are strings. No matter what types of
+  # of data you have in the database, you get strings here. It's your job
+  # to convert them to the type you need.
+  #
+  # In order to insert a new row (pay attention to the +RETURNING+ clause
+  # at the end of the SQL query):
+  #
+  #  id = pool.exec(
+  #    'INSERT INTO book (owner, title) VALUES ($1, $2) RETURNING id',
+  #    ['yegor256', 'Elegant Objects']
+  #  )[0]['id'].to_i
+  #
+  # You can also pass a block to this method, if you want to get an instance
+  # of +PG::Result+ instead of an array of hashes:
+  #
+  #  pool.exec('SELECT * FROM book WHERE owner = $1', ['yegor256']) do |res|
+  #    res.each do |row|
+  #      puts 'ID: ' + row['id'].to_i
+  #      puts 'Title: ' + row['title']
+  #    end
+  #  end
+  #
+  # More details about +exec_params+, which is called here, you can find
+  # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
   def exec(query, args = [], result = 0)
     connect do |c|
       c.exec_params(query, args, result) do |res|

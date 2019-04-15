@@ -46,7 +46,7 @@ Pgtk::PgsqlTask.new :pgsql do |t|
   t.user = 'test'
   t.password = 'test'
   t.dbname = 'test'
-  t.yaml = 'target/config.yml' # YAML file to be created with connection details
+  t.yaml = 'target/pgsql-config.yml' # YAML file to be created with connection details
 end
 ```
 
@@ -56,7 +56,7 @@ And this too:
 require 'pgtk/liquibase_task'
 Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   t.master = 'liquibase/master.xml' # Master XML file path
-  t.yaml = 'target/config.yml' # YAML file with connection details
+  t.yaml = 'target/pgsql-config.yml' # YAML file with connection details
 end
 ```
 
@@ -79,7 +79,7 @@ From inside your app you may find this class useful:
 
 ```ruby
 require 'pgtk/pool'
-yaml = YAML.load_file('target/config.yml')
+yaml = YAML.load_file('config.yml')
 pgsql = Pgtk::Pool.new(
   port: yaml['pgsql']['port'],
   dbname: yaml['pgsql']['dbname'],
@@ -98,6 +98,30 @@ pgsql.connect do |c|
   c.transaction do |conn|
     conn.exec_params('DELETE FROM user WHERE id = $1', [id])
     conn.exec_params('INSERT INTO user (name, phone) VALUES ($1, $2)', [name, phone])
+  end
+end
+```
+
+To make your PostgreSQL database visible in your unit test, I would
+recommend you create a method `test_pgsql` in your `test__helper.rb` file
+(which is `required` in all unit tests) and implement it like this:
+
+```ruby
+require 'yaml'
+require 'minitest/autorun'
+require 'pgtk/pool'
+module Minitest
+  class Test
+    def test_pgsql
+      config = YAML.load_file('target/pgsql-config.yml')
+      @test_pgsql ||= Pgtk::Pool.new(
+        host: config['pgsql']['host'],
+        port: config['pgsql']['port'],
+        dbname: config['pgsql']['dbname'],
+        user: config['pgsql']['user'],
+        password: config['pgsql']['password']
+      ).start
+    end
   end
 end
 ```
