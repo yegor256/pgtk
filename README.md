@@ -56,7 +56,7 @@ And this too:
 require 'pgtk/liquibase_task'
 Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   t.master = 'liquibase/master.xml' # Master XML file path
-  t.yaml = 'target/pgsql-config.yml' # YAML file with connection details
+  t.yaml = ['target/pgsql-config.yml', 'config.yml'] # YAML files with connection details
 end
 ```
 

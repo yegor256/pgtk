@@ -45,7 +45,7 @@ class TestLiquibaseTask < Minitest::Test
       Rake::Task['pgsql2'].invoke
       Pgtk::LiquibaseTask.new(:liquibase2) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
-        t.yaml = File.join(dir, 'cfg.yml')
+        t.yaml = ['file-is-absent', File.join(dir, 'cfg.yml')]
         t.quiet = true
       end
       Rake::Task['liquibase2'].invoke

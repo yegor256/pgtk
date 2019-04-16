@@ -56,7 +56,13 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def run
     raise "Option 'master' is mandatory" unless @master
     raise "Option 'yaml' is mandatory" unless @yaml
-    yml = YAML.load_file(@yaml)
+    yml = YAML.load_file(
+      if @yaml.is_a?(Array)
+        @yaml.drop_while { |f| !File.exist?(f) }.first
+      else
+        @yaml
+      end
+    )
     raise "YAML at #{yaml} is missing 'pgsql' section" unless yml['pgsql']
     pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
     raise "Liquibase master is absent at #{@master}" unless File.exist?(@master)
