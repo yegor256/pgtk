@@ -106,6 +106,17 @@ class Pgtk::Pool
   #    end
   #  end
   #
+  # When the query is too long it's convenient to use an array to specify it:
+  #
+  #  pool.exec(
+  #    [
+  #      'SELECT * FROM book',
+  #      'LEFT JOIN user ON user.id = book.owner',
+  #      'WHERE user.login = $1 AND book.title = $2'
+  #    ],
+  #    ['yegor256', 'Elegant Objects']
+  #  )
+  #
   # More details about +exec_params+, which is called here, you can find
   # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
   def exec(query, args = [], result = 0)
@@ -145,7 +156,8 @@ class Pgtk::Pool
 
     def exec(query, args = [], result = 0)
       start = Time.now
-      out = @conn.exec_params(query, args, result) do |res|
+      sql = query.is_a?(Array) ? query.join(' ') : query
+      out = @conn.exec_params(sql, args, result) do |res|
         if block_given?
           yield res
         else

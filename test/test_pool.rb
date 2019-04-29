@@ -48,7 +48,10 @@ class TestPool < Minitest::Test
       id = pool.transaction do |t|
         t.exec('DELETE FROM book')
         t.exec(
-          'INSERT INTO book (title) VALUES ($1) RETURNING id',
+          [
+            'INSERT INTO book (title)',
+            'VALUES ($1) RETURNING id'
+          ],
           ['Object Thinking']
         )[0]['id'].to_i
       end
