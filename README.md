@@ -10,7 +10,9 @@
 [![PDD status](http://www.0pdd.com/svg?name=yegor256/pgtk)](http://www.0pdd.com/p?name=yegor256/pgtk)
 [![Gem Version](https://badge.fury.io/rb/pgtk.svg)](http://badge.fury.io/rb/pgtk)
 [![Maintainability](https://api.codeclimate.com/v1/badges/3a5bebac001e5288b00d/maintainability)](https://codeclimate.com/github/yegor256/pgtk/maintainability)
+
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
+[![Hits-of-Code](https://hitsofcode.com/github/yegor256/pgtk)](https://hitsofcode.com/view/github/yegor256/pgtk)
 
 This small Ruby gem helps you integrate PostgreSQL with your Ruby
 web app, through [Liquibase](https://www.liquibase.org/). It also adds a simple connection pool
@@ -90,15 +92,12 @@ pgsql.start(5) # Start it with five simultaneous connections
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
 
-You may also use it if you need direct access to the connection,
-for example in order to run a set of requests in a transaction:
+You may also use it if you need to run a transaction:
 
 ```ruby
-pgsql.connect do |c|
-  c.transaction do |conn|
-    conn.exec_params('DELETE FROM user WHERE id = $1', [id])
-    conn.exec_params('INSERT INTO user (name, phone) VALUES ($1, $2)', [name, phone])
-  end
+pgsql.transaction do |t|
+  t.exec('DELETE FROM user WHERE id = $1', [id])
+  t.exec('INSERT INTO user (name, phone) VALUES ($1, $2)', [name, phone])
 end
 ```
 
@@ -114,7 +113,7 @@ module Minitest
   class Test
     def test_pgsql
       config = YAML.load_file('target/pgsql-config.yml')
-      @test_pgsql ||= Pgtk::Pool.new(
+      @@test_pgsql ||= Pgtk::Pool.new(
         host: config['pgsql']['host'],
         port: config['pgsql']['port'],
         dbname: config['pgsql']['dbname'],
