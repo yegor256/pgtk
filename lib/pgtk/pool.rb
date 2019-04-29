@@ -28,14 +28,33 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Pool
+  # A temporary class for logging.
+  class Log
+    def initialize(out)
+      @out = out
+    end
+
+    def debug(msg)
+      if @out.respond_to?(:debug)
+        @out.debug(msg)
+      elsif @out.respond_to?(:puts)
+        @out.puts(msg)
+      end
+    end
+  end
+
   # Constructor.
-  def initialize(host: 'localhost', port:, dbname:, user:, password:)
+  def initialize(
+    host: 'localhost', port:, dbname:, user:,
+    password:, log: STDOUT
+  )
     @host = host
     @port = port
     @dbname = dbname
     @user = user
     @password = password
     @pool = Queue.new
+    @log = Log.new(log)
   end
 
   # Start it with a fixed number of connections. The amount of connections
@@ -51,6 +70,7 @@ class Pgtk::Pool
         user: @user, password: @password
       )
     end
+    @log.debug("PostgreSQL pool started with #{max} connections")
     self
   end
 
@@ -90,7 +110,7 @@ class Pgtk::Pool
   # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
   def exec(query, args = [], result = 0)
     connect do |c|
-      t = Txn.new(c)
+      t = Txn.new(c, @log)
       if block_given?
         t.exec(query, args, result) do |res|
           yield res
@@ -111,19 +131,21 @@ class Pgtk::Pool
   #  end
   def transaction
     connect do |c|
-      t = Txn.new(c)
+      t = Txn.new(c, @log)
       yield t
     end
   end
 
   # A temporary class to execute a single SQL request.
   class Txn
-    def initialize(conn)
+    def initialize(conn, log)
       @conn = conn
+      @log = log
     end
 
     def exec(query, args = [], result = 0)
-      @conn.exec_params(query, args, result) do |res|
+      start = Time.now
+      out = @conn.exec_params(query, args, result) do |res|
         if block_given?
           yield res
         else
@@ -132,6 +154,8 @@ class Pgtk::Pool
           rows
         end
       end
+      @log.debug("#{query}: #{(start - Time.now).round}ms")
+      out
     end
   end
 
