@@ -27,8 +27,8 @@ architect:
 merge:
   script: |-
     bundle install
-    rake
-    pdd
+    bundle exec rake
+    pdd -f /dev/null
 deploy:
   script: |-
     echo "There is nothing to deploy"

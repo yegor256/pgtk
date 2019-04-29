@@ -91,7 +91,40 @@ class Pgtk::Pool
   # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
   def exec(query, args = [], result = 0)
     connect do |c|
-      c.exec_params(query, args, result) do |res|
+      t = Txn.new(c)
+      if block_given?
+        t.exec(query, args, result) do |res|
+          yield res
+        end
+      else
+        t.exec(query, args, result)
+      end
+    end
+  end
+
+  # Run a transaction. The block has to be provided. It will receive
+  # a temporary object, which implements method +exec+, which works
+  # exactly like the method +exec+ of class +Pool+, for example:
+  #
+  #  pgsql.transaction do |t|
+  #    t.exec('DELETE FROM user WHERE id = $1', [id])
+  #    t.exec('INSERT INTO user (name) VALUES ($1)', [name])
+  #  end
+  def transaction
+    connect do |c|
+      t = Txn.new(c)
+      yield t
+    end
+  end
+
+  # A temporary class to execute a single SQL request.
+  class Txn
+    def initialize(conn)
+      @conn = conn
+    end
+
+    def exec(query, args = [], result = 0)
+      @conn.exec_params(query, args, result) do |res|
         if block_given?
           yield res
         else
@@ -103,15 +136,8 @@ class Pgtk::Pool
     end
   end
 
-  # Get a connection from the pool and let us work with it. The block
-  # has to be provided, for example:
-  #
-  #  pgsql.connect do |c|
-  #    c.transaction do |conn|
-  #      conn.exec_params('DELETE FROM user WHERE id = $1', [id])
-  #      conn.exec_params('INSERT INTO user (name) VALUES ($1)', [name])
-  #    end
-  #  end
+  private
+
   def connect
     conn = @pool.pop
     begin
