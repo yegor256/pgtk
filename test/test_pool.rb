@@ -81,7 +81,8 @@ class TestPool < Minitest::Test
         port: yaml['pgsql']['port'],
         dbname: yaml['pgsql']['dbname'],
         user: yaml['pgsql']['user'],
-        password: yaml['pgsql']['password']
+        password: yaml['pgsql']['password'],
+        log: nil
       )
       pool.start(1)
       yield pool
