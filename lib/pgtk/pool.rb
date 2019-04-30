@@ -166,7 +166,7 @@ class Pgtk::Pool
           rows
         end
       end
-      @log.debug("#{query}: #{(start - Time.now).round}ms")
+      @log.debug("#{sql}: #{(start - Time.now).round}ms")
       out
     end
   end
