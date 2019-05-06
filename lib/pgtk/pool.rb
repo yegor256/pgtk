@@ -57,6 +57,11 @@ class Pgtk::Pool
     @log = Log.new(log)
   end
 
+  # Get the version of PostgreSQL server.
+  def version
+    @version ||= exec('SHOW server_version')[0]['server_version']
+  end
+
   # Start it with a fixed number of connections. The amount of connections
   # is specified in +max+ argument and should be big enough to handle
   # the amount of parallel connections you may have to the database. However,

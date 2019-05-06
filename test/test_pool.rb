@@ -33,6 +33,13 @@ require_relative '../lib/pgtk/pool'
 # Copyright:: Copyright (c) 2017-2018 Yegor Bugayenko
 # License:: MIT
 class TestPool < Minitest::Test
+  def test_reads_version
+    bootstrap do |pool|
+      ver = pool.version
+      assert_equal('11.1', ver)
+    end
+  end
+
   def test_basic
     bootstrap do |pool|
       id = pool.exec(
