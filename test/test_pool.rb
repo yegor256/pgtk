@@ -37,6 +37,7 @@ class TestPool < Minitest::Test
     bootstrap do |pool|
       ver = pool.version
       assert(ver.start_with?('1'))
+      assert(!ver.include?(' '))
     end
   end
 

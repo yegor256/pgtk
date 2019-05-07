@@ -59,7 +59,7 @@ class Pgtk::Pool
 
   # Get the version of PostgreSQL server.
   def version
-    @version ||= exec('SHOW server_version')[0]['server_version']
+    @version ||= exec('SHOW server_version')[0]['server_version'].split(' ')[0]
   end
 
   # Start it with a fixed number of connections. The amount of connections
