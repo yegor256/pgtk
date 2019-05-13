@@ -81,6 +81,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--define',
           "liquibase.url=#{Shellwords.escape(yml['pgsql']['url'])}",
           '--define',
+          "liquibase.password=#{Shellwords.escape(yml['pgsql']['password'])}",
+          '--define',
           "liquibase.logging=#{@quiet ? 'severe' : 'info'}",
           '2>&1'
         ].join(' ')

@@ -125,8 +125,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
           'password' => @password,
           'url' => [
             "jdbc:postgresql://localhost:#{port}/",
-            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}",
-            "&password=#{CGI.escape(@password)}"
+            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}"
           ].join
         }
       }.to_yaml
