@@ -29,7 +29,7 @@ require_relative '../lib/pgtk/liquibase_task'
 
 # Liquibase rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2017-2018 Yegor Bugayenko
+# Copyright:: Copyright (c) 2017-2019 Yegor Bugayenko
 # License:: MIT
 class TestLiquibaseTask < Minitest::Test
   def test_basic

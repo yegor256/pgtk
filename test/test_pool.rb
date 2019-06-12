@@ -30,7 +30,7 @@ require_relative '../lib/pgtk/pool'
 
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2017-2018 Yegor Bugayenko
+# Copyright:: Copyright (c) 2017-2019 Yegor Bugayenko
 # License:: MIT
 class TestPool < Minitest::Test
   def test_reads_version
