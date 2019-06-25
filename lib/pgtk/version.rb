@@ -28,5 +28,5 @@ require_relative '../pgtk'
 # License:: MIT
 module Pgtk
   # Current version of the library.
-  VERSION = '1.0.snapshot'
+  VERSION = '0.7.0'
 end
