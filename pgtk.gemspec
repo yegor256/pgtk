@@ -48,6 +48,7 @@ connection pool and query processor, to make SQL manipulation simpler.'
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
   s.add_runtime_dependency 'backtrace', '~> 0.3'
+  s.add_runtime_dependency 'loog', '~> 0.2'
   s.add_runtime_dependency 'pg', '~> 1.1'
   s.add_runtime_dependency 'random-port', '~> 0.3'
   s.add_development_dependency 'codecov', '0.1.10'

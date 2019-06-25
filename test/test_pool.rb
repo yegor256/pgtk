@@ -87,14 +87,7 @@ class TestPool < Minitest::Test
         t.quiet = true
       end
       Rake::Task["liquibase#{id}"].invoke
-      yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
-      pool = Pgtk::Pool.new(
-        port: yaml['pgsql']['port'],
-        dbname: yaml['pgsql']['dbname'],
-        user: yaml['pgsql']['user'],
-        password: yaml['pgsql']['password'],
-        log: nil
-      )
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')))
       pool.start(1)
       yield pool
     end

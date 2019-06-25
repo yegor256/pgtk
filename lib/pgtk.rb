@@ -27,3 +27,6 @@
 module Pgtk
   # Nothing here.
 end
+
+require_relative 'pgtk/pool'
+require_relative 'pgtk/wire'

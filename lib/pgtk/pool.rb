@@ -21,40 +21,20 @@
 # SOFTWARE.
 
 require 'pg'
+require 'loog'
 require_relative '../pgtk'
+require_relative 'wire'
 
 # Pool.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Pool
-  # A temporary class for logging.
-  class Log
-    def initialize(out)
-      @out = out
-    end
-
-    def debug(msg)
-      if @out.respond_to?(:debug)
-        @out.debug(msg)
-      elsif @out.respond_to?(:puts)
-        @out.puts(msg)
-      end
-    end
-  end
-
   # Constructor.
-  def initialize(
-    host: 'localhost', port:, dbname:, user:,
-    password:, log: STDOUT
-  )
-    @host = host
-    @port = port
-    @dbname = dbname
-    @user = user
-    @password = password
+  def initialize(wire, log: Loog::NULL)
+    @wire = wire
+    @log = log
     @pool = Queue.new
-    @log = Log.new(log)
   end
 
   # Get the version of PostgreSQL server.
@@ -70,10 +50,7 @@ class Pgtk::Pool
   # allows only one connection open.
   def start(max = 8)
     max.times do
-      @pool << PG.connect(
-        dbname: @dbname, host: @host, port: @port,
-        user: @user, password: @password
-      )
+      @pool << @wire.connection
     end
     @log.debug("PostgreSQL pool started with #{max} connections")
     self
@@ -182,6 +159,9 @@ class Pgtk::Pool
     conn = @pool.pop
     begin
       yield conn
+    rescue PG::Error
+      conn.close
+      @pool << @wire.connection
     ensure
       @pool << conn
     end

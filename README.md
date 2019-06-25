@@ -81,13 +81,7 @@ From inside your app you may find this class useful:
 
 ```ruby
 require 'pgtk/pool'
-yaml = YAML.load_file('config.yml')
-pgsql = Pgtk::Pool.new(
-  port: yaml['pgsql']['port'],
-  dbname: yaml['pgsql']['dbname'],
-  user: yaml['pgsql']['user'],
-  password: yaml['pgsql']['password']
-)
+pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'))
 pgsql.start(5) # Start it with five simultaneous connections
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
@@ -112,13 +106,9 @@ require 'pgtk/pool'
 module Minitest
   class Test
     def test_pgsql
-      config = YAML.load_file('target/pgsql-config.yml')
+      config = YAML.load_file()
       @@test_pgsql ||= Pgtk::Pool.new(
-        host: config['pgsql']['host'],
-        port: config['pgsql']['port'],
-        dbname: config['pgsql']['dbname'],
-        user: config['pgsql']['user'],
-        password: config['pgsql']['password']
+        Pgtk::Wire::Yaml.new('target/pgsql-config.yml')
       ).start
     end
   end
