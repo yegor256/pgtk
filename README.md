@@ -15,7 +15,7 @@
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
 [![Hits-of-Code](https://hitsofcode.com/github/yegor256/pgtk)](https://hitsofcode.com/view/github/yegor256/pgtk)
 
-This small Ruby gem helps you integrate PostgreSQL with your Ruby
+This small Ruby gem helps you integrate [PostgreSQL](https://www.postgresql.org/) with your Ruby
 web app, through [Liquibase](https://www.liquibase.org/). It also adds a simple connection pool
 and query processor, to make SQL manipulation simpler.
 
@@ -119,6 +119,13 @@ end
 Should work. Well, it works in [zold-io/wts.zold.io](https://github.com/zold-io/wts.zold.io)
 and [yegor256/mailanes](https://github.com/yegor256/mailanes). They both are
 open source, you can see how they use `pgtk`.
+
+These open source web apps of mine are using pgtk (check their source code
+to see how it all works):
+
+  * [wts.zold.io](https://github.com/zold-io/wts.zold.io)
+  * [mailanes](https://github.com/yegor256/mailanes)
+  * [0rsk](https://github.com/yegor256/0rsk)
 
 ## How to contribute
 
