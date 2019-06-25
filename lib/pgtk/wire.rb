@@ -61,7 +61,7 @@ end
 # License:: MIT
 class Pgtk::Wire::Env
   # Constructor.
-  def initialize(var)
+  def initialize(var = 'DATABASE_URL')
     @var = var
   end
 
