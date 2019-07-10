@@ -22,8 +22,10 @@
 
 require 'minitest/autorun'
 require 'tmpdir'
+require 'pg'
 require 'rake'
 require 'yaml'
+require 'loog'
 require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pool'
@@ -67,6 +69,17 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_reconnects_on_pg_error
+    bootstrap do |pool|
+      assert_raises PG::UndefinedTable do
+        pool.exec('SELECT * FROM thisiserror')
+      end
+      5.times do
+        pool.exec('SELECT * FROM book')
+      end
+    end
+  end
+
   private
 
   def bootstrap
@@ -87,7 +100,10 @@ class TestPool < Minitest::Test
         t.quiet = true
       end
       Rake::Task["liquibase#{id}"].invoke
-      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')))
+      pool = Pgtk::Pool.new(
+        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
+        log: Loog::VERBOSE
+      )
       pool.start(1)
       yield pool
     end

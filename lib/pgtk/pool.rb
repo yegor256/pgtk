@@ -148,7 +148,7 @@ class Pgtk::Pool
           rows
         end
       end
-      @log.debug("#{sql}: #{(start - Time.now).round}ms")
+      @log.debug("#{sql}: #{(start - Time.now).round}ms / #{@conn.object_id}")
       out
     end
   end
@@ -159,9 +159,10 @@ class Pgtk::Pool
     conn = @pool.pop
     begin
       yield conn
-    rescue PG::Error
+    rescue StandardError => e
       conn.close
-      @pool << @wire.connection
+      conn = @wire.connection
+      raise e
     ensure
       @pool << conn
     end
