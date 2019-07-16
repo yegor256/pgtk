@@ -116,16 +116,12 @@ module Minitest
 end
 ```
 
-Should work. Well, it works in [zold-io/wts.zold.io](https://github.com/zold-io/wts.zold.io)
-and [yegor256/mailanes](https://github.com/yegor256/mailanes). They both are
+Should work.
+
+Well, it works in [wts.zold.io](https://github.com/zold-io/wts.zold.io),
+[mailanes.com](https://github.com/yegor256/mailanes), and
+[0rsk.com](https://github.com/yegor256/0rsk). They are all
 open source, you can see how they use `pgtk`.
-
-These open source web apps of mine are using pgtk (check their source code
-to see how it all works):
-
-  * [wts.zold.io](https://github.com/zold-io/wts.zold.io)
-  * [mailanes](https://github.com/yegor256/mailanes)
-  * [0rsk](https://github.com/yegor256/0rsk)
 
 ## How to contribute
 
