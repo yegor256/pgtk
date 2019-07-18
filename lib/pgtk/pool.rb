@@ -148,9 +148,9 @@ class Pgtk::Pool
           rows
         end
       end
-      lag = start - Time.now
+      lag = Time.now - start
       if lag < 1
-        @log.debug("#{sql}: #{lag.round}ms / #{@conn.object_id}")
+        @log.debug("#{sql}: #{(lag * 1000).round}ms / #{@conn.object_id}")
       else
         @log.info("#{sql}: #{format('%.02f', lag)}s")
       end
