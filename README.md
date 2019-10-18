@@ -84,6 +84,20 @@ From inside your app you may find this class useful:
 require 'pgtk/pool'
 pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'))
 pgsql.start(5) # Start it with five simultaneous connections
+```
+
+You can also let it pick the connection parameters from the environment
+variable `DATABASE_URL`, formatted like
+`postgres://user:password@host:5432/dbname`:
+
+
+```ruby
+pgsql = Pgtk::Pool.new(Pgtk::Wire::Env.new)
+```
+
+Now you can fetch some data from the DB:
+
+```ruby
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
 
