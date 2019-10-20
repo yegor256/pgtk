@@ -39,7 +39,9 @@ end
 class Pgtk::Wire::Direct
   # Constructor.
   def initialize(host:, port:, dbname:, user:, password:)
+    raise "The host can't be nil" if host.nil?
     @host = host
+    raise "The host can't be nil" if host.nil?
     @port = port
     @dbname = dbname
     @user = user
@@ -62,12 +64,15 @@ end
 class Pgtk::Wire::Env
   # Constructor.
   def initialize(var = 'DATABASE_URL')
+    raise "The name of the environmant variable can't be nil" if var.nil?
     @var = var
   end
 
   # Create a new connection to PostgreSQL server.
   def connection
-    uri = URI(ENV[@var])
+    v = ENV[@var]
+    raise "The environment variable #{@var.inspect} is not set" if v.nil?
+    uri = URI(v)
     Pgtk::Wire::Direct.new(
       host: uri.host,
       port: uri.port,
@@ -85,12 +90,15 @@ end
 class Pgtk::Wire::Yaml
   # Constructor.
   def initialize(file, node = 'pgsql')
+    raise "The name of the file can't be nil" if file.nil?
     @file = file
+    raise "The name of the node in the YAML file can't be nil" if node.nil?
     @node = node
   end
 
   # Create a new connection to PostgreSQL server.
   def connection
+    raise "The file #{@file.inspect} not found" unless File.exist?(@file)
     cfg = YAML.load_file(@file)
     Pgtk::Wire::Direct.new(
       host: cfg['pgsql']['host'],
