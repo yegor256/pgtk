@@ -165,7 +165,7 @@ class Pgtk::Pool
     begin
       yield conn
     rescue StandardError => e
-      conn.close
+      conn.close unless conn.finished?
       conn = @wire.connection
       raise e
     ensure
