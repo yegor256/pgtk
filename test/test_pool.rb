@@ -80,6 +80,40 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_reconnects_on_pg_reboot
+    port = RandomPort::Pool::SINGLETON.acquire
+    Dir.mktmpdir 'test' do |dir|
+      id = rand(100..999)
+      Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
+        t.dir = File.join(dir, 'pgsql')
+        t.user = 'hello'
+        t.password = 'A B C привет ! & | !'
+        t.dbname = 'test'
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = true
+        t.fresh_start = true
+        t.port = port
+      end
+      task = Rake::Task["pgsql#{id}"]
+      task.invoke
+      pool = Pgtk::Pool.new(
+        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
+        log: Loog::VERBOSE
+      )
+      pool.start(1)
+      pool.exec('SELECT * FROM pg_catalog.pg_tables')
+      pid = IO.read(File.join(dir, 'pgsql/pid')).to_i
+      `kill -KILL #{pid}`
+      sleep 1
+      task.reenable
+      task.invoke
+      assert_raises PG::UnableToSend do
+        pool.exec('SELECT * FROM pg_catalog.pg_tables')
+      end
+      pool.exec('SELECT * FROM pg_catalog.pg_tables')
+    end
+  end
+
   private
 
   def bootstrap

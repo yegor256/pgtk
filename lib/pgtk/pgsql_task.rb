@@ -43,6 +43,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   attr_accessor :dbname
   attr_accessor :yaml
   attr_accessor :quiet
+  attr_accessor :port
 
   def initialize(*args, &task_block)
     @name = args.shift || :pgsql
@@ -51,6 +52,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     @user = 'test'
     @password = 'test'
     @dbname = 'test'
+    @port = nil
     unless ::Rake.application.last_description
       desc 'Start a local PostgreSQL server'
     end
@@ -88,8 +90,15 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       )
     end
     raise unless $CHILD_STATUS.exitstatus.zero?
-    port = RandomPort::Pool.new.acquire
+    port = @port
+    if port.nil?
+      port = RandomPort::Pool::SINGLETON.acquire
+      puts "Random TCP port #{port} is used"
+    else
+      puts "Required TCP port #{port} is used"
+    end
     pid = Process.spawn('postgres', '-k', home, '-D', home, "--port=#{port}")
+    IO.write(File.join(@dir, 'pid'), pid)
     at_exit do
       `kill -TERM #{pid}`
       puts "PostgreSQL killed in PID #{pid}"
@@ -130,6 +139,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         }
       }.to_yaml
     )
-    puts "PostgreSQL is running in PID #{pid}"
+    puts "PostgreSQL has been started in process ##{pid}, port #{port}"
   end
 end
