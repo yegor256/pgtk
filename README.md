@@ -1,16 +1,13 @@
 <img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg" height="64px"/>
 
 [![EO principles respected here](https://www.elegantobjects.org/badge.svg)](https://www.elegantobjects.org)
-[![Managed by Zerocracy](https://www.0crat.com/badge/C3RFVLU72.svg)](https://www.0crat.com/p/C3RFVLU72)
 [![DevOps By Rultor.com](http://www.rultor.com/b/yegor256/pgtk)](http://www.rultor.com/p/yegor256/pgtk)
 [![We recommend RubyMine](https://www.elegantobjects.org/rubymine.svg)](https://www.jetbrains.com/ruby/)
 
-[![Build Status](https://travis-ci.org/yegor256/pgtk.svg)](https://travis-ci.org/yegor256/pgtk)
-[![Build status](https://ci.appveyor.com/api/projects/status/tbeaa0d4dk38xdb5?svg=true)](https://ci.appveyor.com/project/yegor256/pgtk)
+[![rake](https://github.com/yegor256/pgtk/actions/workflows/rake.yml/badge.svg)](https://github.com/yegor256/pgtk/actions/workflows/rake.yml)
 [![PDD status](http://www.0pdd.com/svg?name=yegor256/pgtk)](http://www.0pdd.com/p?name=yegor256/pgtk)
 [![Gem Version](https://badge.fury.io/rb/pgtk.svg)](http://badge.fury.io/rb/pgtk)
 [![Maintainability](https://api.codeclimate.com/v1/badges/3a5bebac001e5288b00d/maintainability)](https://codeclimate.com/github/yegor256/pgtk/maintainability)
-
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/yegor256/pgtk/blob/master/LICENSE.txt)
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
 [![Hits-of-Code](https://hitsofcode.com/github/yegor256/pgtk)](https://hitsofcode.com/view/github/yegor256/pgtk)
