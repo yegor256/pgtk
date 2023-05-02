@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Copyright (c) 2019 Yegor Bugayenko
+# Copyright (c) 2019-2023 Yegor Bugayenko
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the 'Software'), to deal
@@ -29,20 +29,16 @@ require_relative '../pgtk'
 
 # Liquibase rake task.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 class Pgtk::LiquibaseTask < Rake::TaskLib
-  attr_accessor :name
-  attr_accessor :master
-  attr_accessor :yaml
-  attr_accessor :quiet
+  attr_accessor :name, :master, :yaml, :quiet
 
   def initialize(*args, &task_block)
+    super()
     @name = args.shift || :liquibase
     @quite = false
-    unless ::Rake.application.last_description
-      desc 'Deploy Liquibase changes to the running PostgreSQL server'
-    end
+    desc 'Deploy Liquibase changes to the running PostgreSQL server' unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
       RakeFileUtils.send(:verbose, true) do
         yield(*[self, task_args].slice(0, task_block.arity)) if block_given?

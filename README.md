@@ -151,3 +151,8 @@ $ bundle exec rake
 
 If it's clean and you don't see any error messages, submit your pull request.
 
+To run a single test, do this:
+
+```
+$ bundle exec ruby test/test_pool.rb -n test_basic
+```

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Copyright (c) 2019 Yegor Bugayenko
+# Copyright (c) 2019-2023 Yegor Bugayenko
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the 'Software'), to deal
@@ -102,12 +102,12 @@ class TestPool < Minitest::Test
       )
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
-      pid = IO.read(File.join(dir, 'pgsql/pid')).to_i
+      pid = File.read(File.join(dir, 'pgsql/pid')).to_i
       `kill -KILL #{pid}`
       sleep 1
       task.reenable
       task.invoke
-      assert_raises PG::UnableToSend do
+      assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
       end
       pool.exec('SELECT * FROM pg_catalog.pg_tables')

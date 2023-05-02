@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Copyright (c) 2019 Yegor Bugayenko
+# Copyright (c) 2019-2023 Yegor Bugayenko
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the 'Software'), to deal
@@ -26,11 +26,7 @@ lib = File.expand_path('lib', __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require_relative 'lib/pgtk/version'
 Gem::Specification.new do |s|
-  s.specification_version = 2 if s.respond_to? :specification_version=
-  if s.respond_to? :required_rubygems_version=
-    s.required_rubygems_version = Gem::Requirement.new('>= 0')
-  end
-  s.rubygems_version = '2.2'
+  s.required_rubygems_version = Gem::Requirement.new('>= 0') if s.respond_to? :required_rubygems_version=
   s.required_ruby_version = '>= 2.3'
   s.name = 'pgtk'
   s.version = Pgtk::VERSION
@@ -44,18 +40,19 @@ connection pool and query processor, to make SQL manipulation simpler.'
   s.homepage = 'http://github.com/yegor256/pgtk'
   s.files = `git ls-files`.split($RS)
   s.executables = s.files.grep(%r{^bin/}) { |f| File.basename(f) }
-  s.test_files = s.files.grep(%r{^(test|spec|features)/})
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
   s.add_runtime_dependency 'backtrace', '~> 0.3'
   s.add_runtime_dependency 'loog', '~> 0.2'
   s.add_runtime_dependency 'pg', '~> 1.1'
   s.add_runtime_dependency 'random-port', '~> 0.3'
-  s.add_development_dependency 'codecov', '0.1.10'
-  s.add_development_dependency 'minitest', '5.5.0'
-  s.add_development_dependency 'rake', '12.0.0'
+  s.add_development_dependency 'minitest', '5.18.0'
+  s.add_development_dependency 'rack', '2.2.7'
+  s.add_development_dependency 'rake', '13.0.6'
   s.add_development_dependency 'rspec-rails', '3.1.0'
-  s.add_development_dependency 'rubocop', '0.61.0'
-  s.add_development_dependency 'rubocop-rspec', '1.31.0'
-  s.add_development_dependency 'xcop', '0.6'
+  s.add_development_dependency 'rubocop', '1.50.2'
+  s.add_development_dependency 'rubocop-rspec', '2.20.0'
+  s.add_development_dependency 'simplecov', '0.22.0'
+  s.add_development_dependency 'xcop', '0.7.1'
+  s.metadata['rubygems_mfa_required'] = 'true'
 end

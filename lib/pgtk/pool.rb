@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Copyright (c) 2019 Yegor Bugayenko
+# Copyright (c) 2019-2023 Yegor Bugayenko
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the 'Software'), to deal
@@ -27,7 +27,7 @@ require_relative 'wire'
 
 # Pool.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Pool
   # Constructor.
@@ -39,7 +39,7 @@ class Pgtk::Pool
 
   # Get the version of PostgreSQL server.
   def version
-    @version ||= exec('SHOW server_version')[0]['server_version'].split(' ')[0]
+    @version ||= exec('SHOW server_version')[0]['server_version'].split[0]
   end
 
   # Start it with a fixed number of connections. The amount of connections
@@ -101,13 +101,11 @@ class Pgtk::Pool
   #
   # More details about +exec_params+, which is called here, you can find
   # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
-  def exec(query, args = [], result = 0)
+  def exec(query, args = [], result = 0, &block)
     connect do |c|
       t = Txn.new(c, @log)
       if block_given?
-        t.exec(query, args, result) do |res|
-          yield res
-        end
+        t.exec(query, args, result, &block)
       else
         t.exec(query, args, result)
       end

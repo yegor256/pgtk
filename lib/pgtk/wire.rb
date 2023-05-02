@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Copyright (c) 2019 Yegor Bugayenko
+# Copyright (c) 2019-2023 Yegor Bugayenko
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the 'Software'), to deal
@@ -27,14 +27,14 @@ require_relative '../pgtk'
 
 # Wires.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 module Pgtk::Wire
 end
 
 # Simple wire with details.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Direct
   # Constructor.
@@ -59,7 +59,7 @@ end
 
 # Using ENV variable.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Env
   # Constructor.
@@ -70,7 +70,7 @@ class Pgtk::Wire::Env
 
   # Create a new connection to PostgreSQL server.
   def connection
-    v = ENV[@var]
+    v = ENV.fetch(@var, nil)
     raise "The environment variable #{@var.inspect} is not set" if v.nil?
     uri = URI(v)
     Pgtk::Wire::Direct.new(
@@ -85,7 +85,7 @@ end
 
 # Using configuration from YAML file.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2023 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Yaml
   # Constructor.
