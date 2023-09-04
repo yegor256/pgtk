@@ -53,6 +53,17 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_logs_sql
+    log = Loog::Buffer.new
+    bootstrap(log: log) do |pool|
+      pool.exec(
+        'INSERT INTO book (title) VALUES ($1)',
+        ['Object Thinking']
+      )
+      assert(log.to_s.include?('INSERT INTO book (title) VALUES ($1)'))
+    end
+  end
+
   def test_transaction
     bootstrap do |pool|
       id = pool.transaction do |t|
@@ -116,7 +127,7 @@ class TestPool < Minitest::Test
 
   private
 
-  def bootstrap
+  def bootstrap(log: Loog::VERBOSE)
     Dir.mktmpdir 'test' do |dir|
       id = rand(100..999)
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
@@ -136,7 +147,7 @@ class TestPool < Minitest::Test
       Rake::Task["liquibase#{id}"].invoke
       pool = Pgtk::Pool.new(
         Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
-        log: Loog::VERBOSE
+        log: log
       )
       pool.start(1)
       yield pool
