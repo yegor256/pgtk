@@ -64,6 +64,16 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_logs_errors
+    log = Loog::Buffer.new
+    bootstrap(log: log) do |pool|
+      assert_raises PG::UndefinedTable do
+        pool.exec('INSERT INTO tableDoesNotExist (a) VALUES (42)')
+      end
+      assert(log.to_s.include?('INSERT INTO tableDoesNotExist'))
+    end
+  end
+
   def test_transaction
     bootstrap do |pool|
       id = pool.transaction do |t|

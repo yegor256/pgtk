@@ -137,14 +137,19 @@ class Pgtk::Pool
     def exec(query, args = [], result = 0)
       start = Time.now
       sql = query.is_a?(Array) ? query.join(' ') : query
-      out = @conn.exec_params(sql, args, result) do |res|
-        if block_given?
-          yield res
-        else
-          rows = []
-          res.each { |r| rows << r }
-          rows
+      begin
+        out = @conn.exec_params(sql, args, result) do |res|
+          if block_given?
+            yield res
+          else
+            rows = []
+            res.each { |r| rows << r }
+            rows
+          end
         end
+      rescue StandardError => e
+        @log.error("#{sql}: #{e.message}")
+        raise e
       end
       lag = Time.now - start
       if lag < 1
