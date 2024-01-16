@@ -54,7 +54,7 @@ Rake::RDocTask.new do |rdoc|
 end
 
 require 'rubocop/rake_task'
-desc 'Run RuboCop on all directories'
+desc 'Run Rubocop on all directories'
 RuboCop::RakeTask.new(:rubocop) do |task|
   task.fail_on_error = true
   task.requires << 'rubocop-rspec'
@@ -69,7 +69,7 @@ Xcop::RakeTask.new :xcop do |task|
 end
 
 task :copyright do
-  sh "grep -q -r '#{Date.today.strftime('%Y')}' \
+  sh "grep -q -r '2019-#{Date.today.strftime('%Y')}' \
     --include '*.rb' \
     --include '*.txt' \
     --include 'Rakefile' \
