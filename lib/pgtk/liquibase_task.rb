@@ -32,12 +32,14 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2024 Yegor Bugayenko
 # License:: MIT
 class Pgtk::LiquibaseTask < Rake::TaskLib
-  attr_accessor :name, :master, :yaml, :quiet
+  attr_accessor :name, :master, :yaml, :quiet, :liquibase_version, :postgresql_version
 
   def initialize(*args, &task_block)
     super()
     @name = args.shift || :liquibase
     @quite = false
+    @liquibase_version = '3.2.2'
+    @postgresql_version = '42.7.0'
     desc 'Deploy Liquibase changes to the running PostgreSQL server' unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
       RakeFileUtils.send(:verbose, true) do
@@ -74,9 +76,9 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--file',
           Shellwords.escape(pom),
           '--define',
-          'liquibase.version=3.2.2',
+          "liquibase.version=#{@liquibase_version}",
           '--define',
-          'postgresql.version=42.7.0',
+          "postgresql.version=#{@postgresql_version}",
           '--define',
           "liquibase.changeLogFile=#{@master}",
           '--define',

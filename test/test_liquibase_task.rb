@@ -47,6 +47,8 @@ class TestLiquibaseTask < Minitest::Test
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = ['file-is-absent', File.join(dir, 'cfg.yml'), 'another']
         t.quiet = true
+        t.postgresql_version = '42.7.0'
+        t.liquibase_version = '3.2.2'
       end
       Rake::Task['liquibase2'].invoke
     end
