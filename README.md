@@ -50,13 +50,16 @@ Pgtk::PgsqlTask.new :pgsql do |t|
 end
 ```
 
-And this too:
+And this too ([org.postgresql:postgresql](https://mvnrepository.com/artifact/org.postgresql/postgresql) and [org.liquibase:liquibase-maven-plugin](https://mvnrepository.com/artifact/org.liquibase/liquibase-maven-plugin) are used inside):
 
 ```ruby
 require 'pgtk/liquibase_task'
 Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   t.master = 'liquibase/master.xml' # Master XML file path
   t.yaml = ['target/pgsql-config.yml', 'config.yml'] # YAML files with connection details
+  t.quiet = false # TRUE by default
+  t.postgresql_version = '42.7.0' # overwriting default version
+  t.liquibase_version = '3.2.2' # overwriting default version
 end
 ```
 
@@ -129,10 +132,12 @@ end
 
 Should work.
 
-Well, it works in [wts.zold.io](https://github.com/zold-io/wts.zold.io),
+Well, it works in 
+[netbout.com](https://github.com/yegor256/netbout),
+[wts.zold.io](https://github.com/zold-io/wts.zold.io),
 [mailanes.com](https://github.com/yegor256/mailanes), and
-[0rsk.com](https://github.com/yegor256/0rsk). They are all
-open source, you can see how they use `pgtk`.
+[0rsk.com](https://github.com/yegor256/0rsk). 
+They are all open source, you can see how they use `pgtk`.
 
 ## How to contribute
 
