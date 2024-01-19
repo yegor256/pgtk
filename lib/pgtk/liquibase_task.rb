@@ -63,7 +63,11 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     )
     raise "YAML at #{yaml} is missing 'pgsql' section" unless yml['pgsql']
     pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
-    raise "Liquibase master is absent at #{@master}" unless File.exist?(@master)
+    unless File.exist?(@master)
+      raise "Liquibase master is absent at '#{@master}', which points to '#{File.realpath(@master)}'. \
+More about this file you can find in Liquibase documentation: \
+https://docs.liquibase.com/concepts/changelogs/xml-format.html"
+    end
     @master = File.expand_path(@master)
     Dir.chdir(File.dirname(@master)) do
       system(
