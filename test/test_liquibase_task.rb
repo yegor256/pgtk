@@ -53,4 +53,15 @@ class TestLiquibaseTask < Minitest::Test
       Rake::Task['liquibase2'].invoke
     end
   end
+
+  def test_with_invalid_master_file
+    Pgtk::LiquibaseTask.new(:lb) do |t|
+      t.master = 'the-file-doesnt-exist.xml'
+      t.yaml = { 'pgsql' => {} }
+    end
+    ex = assert_raises do
+      Rake::Task['lb'].invoke
+    end
+    assert(ex.message.include?('the-file-doesnt-exist.xml'))
+  end
 end

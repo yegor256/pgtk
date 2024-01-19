@@ -54,21 +54,24 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def run
     raise "Option 'master' is mandatory" unless @master
     raise "Option 'yaml' is mandatory" unless @yaml
-    yml = YAML.load_file(
-      if @yaml.is_a?(Array)
-        @yaml.drop_while { |f| !File.exist?(f) }.first
-      else
-        @yaml
-      end
-    )
-    raise "YAML at #{yaml} is missing 'pgsql' section" unless yml['pgsql']
-    pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
+    yml = @yaml
+    unless yml.is_a?(Hash)
+      yml = YAML.load_file(
+        if @yaml.is_a?(Array)
+          @yaml.drop_while { |f| !File.exist?(f) }.first
+        else
+          @yaml
+        end
+      )
+    end
+    raise "YAML configuration is missing the 'pgsql' section" unless yml['pgsql']
+    @master = File.expand_path(@master)
     unless File.exist?(@master)
-      raise "Liquibase master is absent at '#{@master}', which points to '#{File.realpath(@master)}'. \
+      raise "Liquibase master is absent at '#{@master}'. \
 More about this file you can find in Liquibase documentation: \
 https://docs.liquibase.com/concepts/changelogs/xml-format.html"
     end
-    @master = File.expand_path(@master)
+    pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
     Dir.chdir(File.dirname(@master)) do
       system(
         [
