@@ -24,6 +24,6 @@ Metrics/ClassLength:
 Metrics/MethodLength:
   Max: 100
 Metrics/PerceivedComplexity:
-  Max: 12
+  Max: 15
 Metrics/ParameterLists:
   Max: 6

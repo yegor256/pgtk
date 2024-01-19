@@ -72,6 +72,7 @@ More about this file you can find in Liquibase documentation: \
 https://docs.liquibase.com/concepts/changelogs/xml-format.html"
     end
     pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
+    old = @liquibase_version.match?(/^[1-3]\..+$/)
     Dir.chdir(File.dirname(@master)) do
       system(
         [
@@ -87,7 +88,9 @@ https://docs.liquibase.com/concepts/changelogs/xml-format.html"
           '--define',
           "postgresql.version=#{@postgresql_version}",
           '--define',
-          "liquibase.changeLogFile=#{@master}",
+          "liquibase.searchPath=#{File.dirname(@master)}",
+          '--define',
+          "liquibase.changeLogFile=#{old ? @master : File.basename(@master)}",
           '--define',
           "liquibase.url=#{Shellwords.escape(yml['pgsql']['url'])}",
           '--define',

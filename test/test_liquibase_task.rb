@@ -54,6 +54,27 @@ class TestLiquibaseTask < Minitest::Test
     end
   end
 
+  def test_latest_version
+    Dir.mktmpdir 'test' do |dir|
+      Pgtk::PgsqlTask.new(:pgsql) do |t|
+        t.dir = File.join(dir, 'pgsql')
+        t.user = 'xxx'
+        t.password = 'xxx'
+        t.dbname = 'xxx'
+        t.yaml = File.join(dir, 'xxx.yml')
+        t.quiet = true
+      end
+      Rake::Task['pgsql'].invoke
+      Pgtk::LiquibaseTask.new(:liquibase) do |t|
+        t.master = File.join(__dir__, '../test-resources/master.xml')
+        t.yaml = File.join(dir, 'xxx.yml')
+        t.postgresql_version = '42.7.1'
+        t.liquibase_version = '4.25.1'
+      end
+      Rake::Task['liquibase'].invoke
+    end
+  end
+
   def test_with_invalid_master_file
     Pgtk::LiquibaseTask.new(:lb) do |t|
       t.master = 'the-file-doesnt-exist.xml'
