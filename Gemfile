@@ -27,7 +27,7 @@ gem 'minitest', '5.22.3', require: false
 gem 'rack', '2.2.9', require: false
 gem 'rake', '13.1.0', require: false
 gem 'rspec-rails', '6.1.2', require: false
-gem 'rubocop', '1.50.2', require: false
+gem 'rubocop', '1.62.1', require: false
 gem 'rubocop-rspec', '2.20.0', require: false
 gem 'simplecov', '0.22.0', require: false
 gem 'xcop', '0.7.1', require: false
