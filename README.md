@@ -69,6 +69,17 @@ Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
 end
 ```
 
+The config.yml file should be in this format:
+
+```yaml
+pgsql:
+  host: ...
+  port: ...
+  dbname: ...
+  user: ...
+  password: ...
+```
+
 You should create that `liquibase/master.xml` file in your repository,
 and a number of other XML files with Liquibase changes. This
 [example](https://github.com/zold-io/wts.zold.io/tree/master/liquibase)
