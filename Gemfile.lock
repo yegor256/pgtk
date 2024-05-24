@@ -56,6 +56,7 @@ GEM
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
     json (2.7.2)
+    language_server-protocol (3.17.0.3)
     loofah (2.22.0)
       crass (~> 1.0.2)
       nokogiri (>= 1.12.0)
@@ -63,6 +64,8 @@ GEM
     minitest (5.23.1)
     mutex_m (0.2.0)
     nokogiri (1.16.5-arm64-darwin)
+      racc (~> 1.4)
+    nokogiri (1.16.5-x86_64-linux)
       racc (~> 1.4)
     parallel (1.24.0)
     parser (3.3.1.0)
@@ -122,14 +125,15 @@ GEM
       rspec-mocks (~> 3.13)
       rspec-support (~> 3.13)
     rspec-support (3.13.1)
-    rubocop (1.50.2)
+    rubocop (1.64.0)
       json (~> 2.3)
+      language_server-protocol (>= 3.17.0)
       parallel (~> 1.10)
-      parser (>= 3.2.0.0)
+      parser (>= 3.3.0.2)
       rainbow (>= 2.2.2, < 4.0)
       regexp_parser (>= 1.8, < 3.0)
       rexml (>= 3.2.5, < 4.0)
-      rubocop-ast (>= 1.28.0, < 2.0)
+      rubocop-ast (>= 1.31.1, < 2.0)
       ruby-progressbar (~> 1.7)
       unicode-display_width (>= 2.4.0, < 3.0)
     rubocop-ast (1.31.3)
@@ -163,6 +167,7 @@ GEM
 
 PLATFORMS
   arm64-darwin-22
+  x86_64-linux
 
 DEPENDENCIES
   minitest (= 5.23.1)
@@ -170,7 +175,7 @@ DEPENDENCIES
   rack (= 3.0.11)
   rake (= 13.2.1)
   rspec-rails (= 6.1.2)
-  rubocop (= 1.50.2)
+  rubocop (= 1.64.0)
   rubocop-rspec (= 2.20.0)
   simplecov (= 0.22.0)
   xcop (= 0.7.1)

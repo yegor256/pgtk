@@ -142,9 +142,7 @@ class Pgtk::Pool
           if block_given?
             yield res
           else
-            rows = []
-            res.each { |r| rows << r }
-            rows
+            res.each.to_a
           end
         end
       rescue StandardError => e
