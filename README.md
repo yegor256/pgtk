@@ -96,7 +96,6 @@ You can also let it pick the connection parameters from the environment
 variable `DATABASE_URL`, formatted like
 `postgres://user:password@host:5432/dbname`:
 
-
 ```ruby
 pgsql = Pgtk::Pool.new(Pgtk::Wire::Env.new)
 ```
@@ -138,11 +137,11 @@ end
 
 Should work.
 
-Well, it works in 
+Well, it works in
 [netbout.com](https://github.com/yegor256/netbout),
 [wts.zold.io](https://github.com/zold-io/wts.zold.io),
 [mailanes.com](https://github.com/yegor256/mailanes), and
-[0rsk.com](https://github.com/yegor256/0rsk). 
+[0rsk.com](https://github.com/yegor256/0rsk).
 They are all open source, you can see how they use `pgtk`.
 
 ## How to contribute
