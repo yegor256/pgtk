@@ -72,14 +72,14 @@ GEM
     psych (5.1.2)
       stringio
     racc (1.8.0)
-    rack (2.2.9)
-    rack-session (1.0.2)
-      rack (< 3)
+    rack (3.0.11)
+    rack-session (2.0.0)
+      rack (>= 3.0.0)
     rack-test (2.1.0)
       rack (>= 1.3)
-    rackup (1.0.0)
-      rack (< 3)
-      webrick
+    rackup (2.1.0)
+      rack (>= 3)
+      webrick (~> 1.8)
     rails-dom-testing (2.2.0)
       activesupport (>= 5.0.0)
       minitest
@@ -167,7 +167,7 @@ PLATFORMS
 DEPENDENCIES
   minitest (= 5.23.1)
   pgtk!
-  rack (= 2.2.9)
+  rack (= 3.0.11)
   rake (= 13.2.1)
   rspec-rails (= 6.1.2)
   rubocop (= 1.50.2)

@@ -24,7 +24,7 @@ source 'https://rubygems.org'
 gemspec
 
 gem 'minitest', '5.23.1', require: false
-gem 'rack', '2.2.9', require: false
+gem 'rack', '3.0.11', require: false
 gem 'rake', '13.2.1', require: false
 gem 'rspec-rails', '6.1.2', require: false
 gem 'rubocop', '1.50.2', require: false
