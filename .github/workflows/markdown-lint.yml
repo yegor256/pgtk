@@ -18,32 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 ---
-AllCops:
-  Exclude:
-    - 'bin/**/*'
-    - 'assets/**/*'
-  DisplayCopNames: true
-  TargetRubyVersion: 2.3
-  SuggestExtensions: false
-  NewCops: enable
-
-Style/ClassAndModuleChildren:
-  Enabled: false
-Layout/EndOfLine:
-  EnforcedStyle: lf
-Metrics/BlockLength:
-  Max: 50
-Layout/EmptyLineAfterGuardClause:
-  Enabled: false
-Metrics/AbcSize:
-  Max: 50
-Metrics/CyclomaticComplexity:
-  Max: 12
-Metrics/ClassLength:
-  Max: 120
-Metrics/MethodLength:
-  Max: 100
-Metrics/PerceivedComplexity:
-  Max: 15
-Metrics/ParameterLists:
-  Max: 6
+name: markdown-lint
+'on':
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+    paths-ignore: ['paper/**', 'sandbox/**']
+concurrency:
+  group: markdown-lint-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  markdown-lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: articulate/actions-markdownlint@v1

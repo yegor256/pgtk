@@ -18,32 +18,40 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 ---
-AllCops:
-  Exclude:
-    - 'bin/**/*'
-    - 'assets/**/*'
-  DisplayCopNames: true
-  TargetRubyVersion: 2.3
-  SuggestExtensions: false
-  NewCops: enable
-
-Style/ClassAndModuleChildren:
-  Enabled: false
-Layout/EndOfLine:
-  EnforcedStyle: lf
-Metrics/BlockLength:
-  Max: 50
-Layout/EmptyLineAfterGuardClause:
-  Enabled: false
-Metrics/AbcSize:
-  Max: 50
-Metrics/CyclomaticComplexity:
-  Max: 12
-Metrics/ClassLength:
-  Max: 120
-Metrics/MethodLength:
-  Max: 100
-Metrics/PerceivedComplexity:
-  Max: 15
-Metrics/ParameterLists:
-  Max: 6
+name: license
+'on':
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  license:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          header="Copyright (c) $(date +%Y) Yegor Bugayenko"
+          failed="false"
+          while IFS= read -r file; do
+            if ! grep -q "${header}" "${file}"; then
+              failed="true"
+              echo "⚠️ Copyright header is not found in: ${file}"
+            else
+              echo "File looks good: ${file}"
+            fi
+          done < <(find . -type f \( \
+            -name "Dockerfile" -o \
+            -name "LICENSE.txt" -o \
+            -name "Makefile" -o \
+            -name "Rakefile" -o \
+            -name "*.sh" -o \
+            -name "*.rb" -o \
+            -name "*.fe" -o \
+            -name "*.yml" \
+            \) -print)
+          if [ "${failed}" = "true" ]; then
+            exit 1
+          fi

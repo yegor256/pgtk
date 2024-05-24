@@ -18,32 +18,24 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 ---
-AllCops:
-  Exclude:
-    - 'bin/**/*'
-    - 'assets/**/*'
-  DisplayCopNames: true
-  TargetRubyVersion: 2.3
-  SuggestExtensions: false
-  NewCops: enable
-
-Style/ClassAndModuleChildren:
-  Enabled: false
-Layout/EndOfLine:
-  EnforcedStyle: lf
-Metrics/BlockLength:
-  Max: 50
-Layout/EmptyLineAfterGuardClause:
-  Enabled: false
-Metrics/AbcSize:
-  Max: 50
-Metrics/CyclomaticComplexity:
-  Max: 12
-Metrics/ClassLength:
-  Max: 120
-Metrics/MethodLength:
-  Max: 100
-Metrics/PerceivedComplexity:
-  Max: 15
-Metrics/ParameterLists:
-  Max: 6
+name: actionlint
+'on':
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  actionlint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        id: get_actionlint
+        # yamllint disable-line rule:line-length
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+      - name: Check workflow files
+        run: ${{ steps.get_actionlint.outputs.executable }} -color
+        shell: bash
