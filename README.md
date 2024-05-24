@@ -1,4 +1,4 @@
-<img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg" height="64px"/>
+# Ruby + PostgreSQL + Liquibase + Rake
 
 [![EO principles respected here](https://www.elegantobjects.org/badge.svg)](https://www.elegantobjects.org)
 [![DevOps By Rultor.com](http://www.rultor.com/b/yegor256/pgtk)](http://www.rultor.com/p/yegor256/pgtk)
@@ -12,8 +12,10 @@
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
 [![Hits-of-Code](https://hitsofcode.com/github/yegor256/pgtk)](https://hitsofcode.com/view/github/yegor256/pgtk)
 
-This small Ruby gem helps you integrate [PostgreSQL](https://www.postgresql.org/) with your Ruby
-web app, through [Liquibase](https://www.liquibase.org/). It also adds a simple connection pool
+This small Ruby gem helps you integrate
+[PostgreSQL](https://www.postgresql.org/) with your Ruby
+web app, through [Liquibase](https://www.liquibase.org/).
+It also adds a simple connection pool
 and query processor, to make SQL manipulation simpler.
 
 First of all, on top of
@@ -26,8 +28,8 @@ you need to have
 In Ubuntu 16+ this should be enough:
 
 ```bash
-$ sudo apt-get install -y postgresql-10 postgresql-client-10
-$ sudo apt-get install -y default-jre maven
+sudo apt-get install -y postgresql-10 postgresql-client-10
+sudo apt-get install -y default-jre maven
 ```
 
 Then, add this to your [`Gemfile`](https://bundler.io/gemfile.html):
@@ -36,7 +38,8 @@ Then, add this to your [`Gemfile`](https://bundler.io/gemfile.html):
 gem 'pgtk'
 ```
 
-Then, add this to your [`Rakefile`](https://github.com/ruby/rake/blob/master/doc/rakefile.rdoc):
+Then, add this to your
+[`Rakefile`](https://github.com/ruby/rake/blob/master/doc/rakefile.rdoc):
 
 ```ruby
 require 'pgtk/pgsql_task'
@@ -50,7 +53,10 @@ Pgtk::PgsqlTask.new :pgsql do |t|
 end
 ```
 
-And this too ([org.postgresql:postgresql](https://mvnrepository.com/artifact/org.postgresql/postgresql) and [org.liquibase:liquibase-maven-plugin](https://mvnrepository.com/artifact/org.liquibase/liquibase-maven-plugin) are used inside):
+And this too
+([org.postgresql:postgresql][plugin-1]
+and [org.liquibase:liquibase-maven-plugin][plugin-2]
+are used inside):
 
 ```ruby
 require 'pgtk/liquibase_task'
@@ -63,6 +69,18 @@ Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
 end
 ```
 
+The config.yml file should be in this format:
+
+```yaml
+pgsql:
+  url: jdbc:postgresql://<host>:<port>/<dbname>?user=<user>
+  host: ...
+  port: ...
+  dbname: ...
+  user: ...
+  password: ...
+```
+
 You should create that `liquibase/master.xml` file in your repository,
 and a number of other XML files with Liquibase changes. This
 [example](https://github.com/zold-io/wts.zold.io/tree/master/liquibase)
@@ -71,7 +89,7 @@ will help you understand them.
 Now, you can do this:
 
 ```bash
-$ bundle exec rake pgsql liquibase
+bundle exec rake pgsql liquibase
 ```
 
 A temporary PostgreSQL server will be started and the entire set of
@@ -89,7 +107,6 @@ pgsql.start(5) # Start it with five simultaneous connections
 You can also let it pick the connection parameters from the environment
 variable `DATABASE_URL`, formatted like
 `postgres://user:password@host:5432/dbname`:
-
 
 ```ruby
 pgsql = Pgtk::Pool.new(Pgtk::Wire::Env.new)
@@ -132,29 +149,34 @@ end
 
 Should work.
 
-Well, it works in 
+Well, it works in
 [netbout.com](https://github.com/yegor256/netbout),
 [wts.zold.io](https://github.com/zold-io/wts.zold.io),
 [mailanes.com](https://github.com/yegor256/mailanes), and
-[0rsk.com](https://github.com/yegor256/0rsk). 
+[0rsk.com](https://github.com/yegor256/0rsk).
 They are all open source, you can see how they use `pgtk`.
 
 ## How to contribute
 
-Read [these guidelines](https://www.yegor256.com/2014/04/15/github-guidelines.html).
+Read
+[these guidelines](https://www.yegor256.com/2014/04/15/github-guidelines.html).
 Make sure your build is green before you contribute
-your pull request. You will need to have [Ruby](https://www.ruby-lang.org/en/) 2.3+ and
+your pull request. You will need to have
+[Ruby](https://www.ruby-lang.org/en/) 2.3+ and
 [Bundler](https://bundler.io/) installed. Then:
 
-```
-$ bundle update
-$ bundle exec rake
+```bash
+bundle update
+bundle exec rake
 ```
 
 If it's clean and you don't see any error messages, submit your pull request.
 
 To run a single test, do this:
 
+```bash
+bundle exec ruby test/test_pool.rb -n test_basic
 ```
-$ bundle exec ruby test/test_pool.rb -n test_basic
-```
+
+[plugin-1]: https://mvnrepository.com/artifact/org.postgresql/postgresql
+[plugin-2]: https://mvnrepository.com/artifact/org.liquibase/liquibase-maven-plugin

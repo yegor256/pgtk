@@ -67,12 +67,17 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     raise "YAML configuration is missing the 'pgsql' section" unless yml['pgsql']
     @master = File.expand_path(@master)
     unless File.exist?(@master)
-      raise "Liquibase master is absent at '#{@master}'. \
-More about this file you can find in Liquibase documentation: \
-https://docs.liquibase.com/concepts/changelogs/xml-format.html"
+      raise \
+        "Liquibase master is absent at '#{@master}'. " \
+        'More about this file you can find in Liquibase documentation: ' \
+        'https://docs.liquibase.com/concepts/changelogs/xml-format.html'
     end
     pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
     old = @liquibase_version.match?(/^[1-3]\..+$/)
+    url = yml['pgsql']['url']
+    raise "The 'url' is not set in the config (YAML)" if url.nil?
+    password = yml['pgsql']['password']
+    raise "The 'password' is not set in the config (YAML)" if password.nil?
     Dir.chdir(File.dirname(@master)) do
       system(
         [
@@ -92,9 +97,9 @@ https://docs.liquibase.com/concepts/changelogs/xml-format.html"
           '--define',
           "liquibase.changeLogFile=#{old ? @master : File.basename(@master)}",
           '--define',
-          "liquibase.url=#{Shellwords.escape(yml['pgsql']['url'])}",
+          "liquibase.url=#{Shellwords.escape(url)}",
           '--define',
-          "liquibase.password=#{Shellwords.escape(yml['pgsql']['password'])}",
+          "liquibase.password=#{Shellwords.escape(password)}",
           '--define',
           "liquibase.logging=#{@quiet ? 'severe' : 'info'}",
           '2>&1'

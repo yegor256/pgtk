@@ -18,32 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 ---
-name: rake
-on:
+name: markdown-lint
+'on':
   push:
     branches:
       - master
   pull_request:
     branches:
       - master
+    paths-ignore: ['paper/**', 'sandbox/**']
+concurrency:
+  group: markdown-lint-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  test:
-    name: test
-    strategy:
-      matrix:
-        os: [ubuntu-20.04]
-        ruby: [3.2]
-    runs-on: ${{ matrix.os }}
+  markdown-lint:
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-14
-          sudo ln -s /usr/lib/postgresql/14/bin/initdb /bin/initdb
-          sudo ln -s /usr/lib/postgresql/14/bin/postgres /bin/postgres
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      - run: bundle install
-      - run: bundle exec rake
+      - uses: articulate/actions-markdownlint@v1
