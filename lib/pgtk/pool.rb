@@ -123,7 +123,10 @@ class Pgtk::Pool
   def transaction
     connect do |c|
       t = Txn.new(c, @log)
-      yield t
+      t.exec('START TRANSACTION')
+      r = yield t
+      t.exec('COMMIT')
+      r
     end
   end
 

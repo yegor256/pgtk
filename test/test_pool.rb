@@ -90,6 +90,20 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_transaction_with_error
+    bootstrap do |pool|
+      pool.exec('DELETE FROM book')
+      assert(pool.exec('SELECT * FROM book').empty?)
+      assert_raises do
+        pool.transaction do |t|
+          t.exec('INSERT INTO book (title) VALUES ($1)', ['hey'])
+          t.exec('INSERT INTO book (error_here) VALUES ($1)', ['hey'])
+        end
+      end
+      assert(pool.exec('SELECT * FROM book').empty?)
+    end
+  end
+
   def test_reconnects_on_pg_error
     bootstrap do |pool|
       assert_raises PG::UndefinedTable do
