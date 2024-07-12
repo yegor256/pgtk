@@ -101,6 +101,8 @@ class TestPool < Minitest::Test
         end
       end
       assert(pool.exec('SELECT * FROM book').empty?)
+      pool.exec('INSERT INTO book (title) VALUES ($1)', ['another'])
+      assert(!pool.exec('SELECT * FROM book').empty?)
     end
   end
 

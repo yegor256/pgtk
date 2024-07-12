@@ -124,9 +124,14 @@ class Pgtk::Pool
     connect do |c|
       t = Txn.new(c, @log)
       t.exec('START TRANSACTION')
-      r = yield t
-      t.exec('COMMIT')
-      r
+      begin
+        r = yield t
+        t.exec('COMMIT')
+        r
+      rescue StandardError => e
+        t.exec('ROLLBACK')
+        raise e
+      end
     end
   end
 
