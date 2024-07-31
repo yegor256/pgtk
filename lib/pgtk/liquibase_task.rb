@@ -37,7 +37,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def initialize(*args, &task_block)
     super()
     @name = args.shift || :liquibase
-    @quite = false
+    @quiet = false
     @liquibase_version = '3.2.2'
     @postgresql_version = '42.7.0'
     desc 'Deploy Liquibase changes to the running PostgreSQL server' unless ::Rake.application.last_description
@@ -85,7 +85,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--errors',
           '--batch-mode',
           '--fail-fast',
-          @quiet ? '--quiet' : '',
+          @quiet ? '--quiet' : '--debug',
           '--file',
           Shellwords.escape(pom),
           '--define',
@@ -100,8 +100,6 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           "liquibase.url=#{Shellwords.escape(url)}",
           '--define',
           "liquibase.password=#{Shellwords.escape(password)}",
-          '--define',
-          "liquibase.logging=#{@quiet ? 'severe' : 'info'}",
           '2>&1'
         ].join(' ')
       )

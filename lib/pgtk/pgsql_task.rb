@@ -41,7 +41,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     super()
     @name = args.shift || :pgsql
     @fresh_start = false
-    @quite = false
+    @quiet = false
     @user = 'test'
     @password = 'test'
     @dbname = 'test'
