@@ -83,15 +83,24 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     port = @port
     if port.nil?
       port = RandomPort::Pool::SINGLETON.acquire
-      puts "Random TCP port #{port} is used"
+      puts "Random TCP port #{port} is used for PostgreSQL server" unless @quiet
     else
-      puts "Required TCP port #{port} is used"
+      puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
     end
-    pid = Process.spawn('postgres', '-k', home, '-D', home, "--port=#{port}")
+    pid = Process.spawn(
+      [
+        'postgres',
+        '-k', Shellwords.escape(home),
+        '-D', Shellwords.escape(home),
+        "--port=#{port}"
+      ].join(' '),
+      $stdout => File.join(home, 'stdout.txt'),
+      $stderr => File.join(home, 'stderr.txt')
+    )
     File.write(File.join(@dir, 'pid'), pid)
     at_exit do
       `kill -TERM #{pid}`
-      puts "PostgreSQL killed in PID #{pid}"
+      puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
     sleep 1
     attempt = 0
@@ -128,6 +137,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         }
       }.to_yaml
     )
-    puts "PostgreSQL has been started in process ##{pid}, port #{port}"
+    puts "PostgreSQL has been started in process ##{pid}, port #{port}" unless @quiet
   end
 end

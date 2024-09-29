@@ -39,6 +39,7 @@ GEM
       minitest (>= 5.1)
       securerandom (>= 0.3)
       tzinfo (~> 2.0, >= 2.0.5)
+    ansi (1.5.0)
     ast (2.4.2)
     backtrace (0.4.0)
     base64 (0.2.0)
@@ -69,6 +70,11 @@ GEM
       nokogiri (>= 1.12.0)
     loog (0.5.2)
     minitest (5.25.1)
+    minitest-reporters (1.7.1)
+      ansi
+      builder
+      minitest (>= 5.0)
+      ruby-progressbar
     nokogiri (1.16.7-arm64-darwin)
       racc (~> 1.4)
     nokogiri (1.16.7-x86_64-linux)
@@ -116,6 +122,7 @@ GEM
     regexp_parser (2.9.2)
     reline (0.5.9)
       io-console (~> 0.5)
+    rexml (3.3.8)
     rspec-core (3.13.1)
       rspec-support (~> 3.13.0)
     rspec-expectations (3.13.2)
@@ -153,6 +160,9 @@ GEM
       docile (~> 1.1)
       simplecov-html (~> 0.11)
       simplecov_json_formatter (~> 0.1)
+    simplecov-cobertura (2.1.0)
+      rexml
+      simplecov (~> 0.19)
     simplecov-html (0.12.3)
     simplecov_json_formatter (0.1.4)
     slop (4.10.1)
@@ -177,6 +187,7 @@ PLATFORMS
 
 DEPENDENCIES
   minitest (= 5.25.1)
+  minitest-reporters (~> 1.7)
   pgtk!
   rack (= 3.1.7)
   rake (= 13.2.1)
@@ -184,6 +195,7 @@ DEPENDENCIES
   rubocop (= 1.66.1)
   rubocop-rspec (= 3.0.5)
   simplecov (= 0.22.0)
+  simplecov-cobertura (~> 2.1)
   xcop (= 0.7.1)
 
 BUNDLED WITH
