@@ -22,6 +22,7 @@
 
 require 'cgi'
 require 'English'
+require 'qbash'
 require 'rake'
 require 'rake/tasklib'
 require 'random-port'
@@ -66,19 +67,19 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     out = "2>&1 #{@quiet ? '>/dev/null' : ''}"
     Tempfile.open do |pwfile|
       File.write(pwfile.path, @password)
-      system(
+      qbash(
         [
           'initdb --auth=trust',
-          "-D #{Shellwords.escape(home)}",
+          '-D',
+          Shellwords.escape(home),
           '--username',
           Shellwords.escape(@user),
           '--pwfile',
           Shellwords.escape(pwfile.path),
           out
-        ].join(' ')
+        ]
       )
     end
-    raise unless $CHILD_STATUS.exitstatus.zero?
     port = @port
     if port.nil?
       port = RandomPort::Pool::SINGLETON.acquire
@@ -95,16 +96,15 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     sleep 1
     attempt = 0
     begin
-      system(
+      qbash(
         [
           "createdb -h localhost -p #{port}",
           '--username',
           Shellwords.escape(@user),
           Shellwords.escape(@dbname),
           out
-        ].join(' ')
+        ]
       )
-      raise unless $CHILD_STATUS.exitstatus.zero?
     rescue StandardError => e
       puts e.message
       sleep(5)

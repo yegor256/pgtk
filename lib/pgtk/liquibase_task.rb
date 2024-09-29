@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 require 'English'
+require 'qbash'
 require 'rake'
 require 'rake/tasklib'
 require 'shellwords'
@@ -79,7 +80,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     password = yml['pgsql']['password']
     raise "The 'password' is not set in the config (YAML)" if password.nil?
     Dir.chdir(File.dirname(@master)) do
-      system(
+      qbash(
         [
           'mvn verify',
           '--errors',
@@ -101,9 +102,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--define',
           "liquibase.password=#{Shellwords.escape(password)}",
           '2>&1'
-        ].join(' ')
+        ]
       )
     end
-    raise unless $CHILD_STATUS.exitstatus.zero?
   end
 end
