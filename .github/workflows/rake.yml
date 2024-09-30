@@ -31,16 +31,16 @@ jobs:
     name: test
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-24.04]
         ruby: [3.2]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-14
-          sudo ln -s /usr/lib/postgresql/14/bin/initdb /bin/initdb
-          sudo ln -s /usr/lib/postgresql/14/bin/postgres /bin/postgres
+          sudo apt-get install -y postgresql
+          sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/initdb)" /bin/initdb
+          sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/postgres)" /bin/postgres
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
