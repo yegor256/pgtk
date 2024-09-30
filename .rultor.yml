@@ -23,7 +23,7 @@ docker:
 assets:
   rubygems.yml: yegor256/home#assets/rubygems.yml
 install: |
-  export PATH=$PATH:/usr/lib/postgresql/10/bin
+  export PATH=$PATH:$(realpath /usr/lib/postgresql/*/bin)
   sudo apt-get -y update
   sudo apt-get -y install libpq-dev postgresql-client postgresql
   pdd -f /dev/null
