@@ -29,7 +29,7 @@ gem 'rack', '3.1.7', require: false
 gem 'rake', '13.2.1', require: false
 gem 'rspec-rails', '7.0.1', require: false
 gem 'rubocop', '1.66.1', require: false
-gem 'rubocop-rspec', '3.0.5', require: false
+gem 'rubocop-rspec', '3.1.0', require: false
 gem 'simplecov', '0.22.0', require: false
 gem 'simplecov-cobertura', '~>2.1'
 gem 'xcop', '0.7.1', require: false
