@@ -91,7 +91,7 @@ GEM
       elapsed (> 0)
       loog (> 0)
     racc (1.8.1)
-    rack (3.1.7)
+    rack (3.1.8)
     rack-session (2.0.0)
       rack (>= 3.0.0)
     rack-test (2.1.0)
@@ -189,7 +189,7 @@ DEPENDENCIES
   minitest (= 5.25.1)
   minitest-reporters (~> 1.7)
   pgtk!
-  rack (= 3.1.7)
+  rack (= 3.1.8)
   rake (= 13.2.1)
   rspec-rails (= 7.0.1)
   rubocop (= 1.66.1)
