@@ -39,7 +39,7 @@ jobs:
           sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/postgres)" /bin/postgres
       - run: bundle install
       - run: bundle exec rake
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage/.resultset.json
