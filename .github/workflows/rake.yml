@@ -45,4 +45,5 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
       - run: bundle update
+      - run: bundle exec ruby test/test_pool.rb -n test_reconnects_on_pg_reboot
       - run: bundle exec rake
