@@ -128,7 +128,7 @@ class TestPool < Minitest::Test
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = true
+        t.quiet = false
         t.fresh_start = true
         t.port = port
       end
@@ -149,7 +149,7 @@ class TestPool < Minitest::Test
         sleep(0.1)
         cycle += 1
         if cycle > 20
-          qbash('ps -a')
+          qbash('ps -ax | grep postgres')
           raise "Can't stop running postgres at port #{port}, for some reason"
         end
       rescue StandardError => e
