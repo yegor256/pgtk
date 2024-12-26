@@ -92,6 +92,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         'postgres',
         '-k', Shellwords.escape(home),
         '-D', Shellwords.escape(home),
+        '-c', Shellwords.escape("log_directory=#{home}"),
+        '-c', 'logging_collector=on',
+        '-c', 'log_statement=all',
+        '-c', 'log_filename=pgsql.log',
         "--port=#{port}"
       ].join(' '),
       $stdout => File.join(home, 'stdout.txt'),

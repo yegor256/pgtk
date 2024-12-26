@@ -44,6 +44,7 @@ class TestPgsqlTask < Minitest::Test
       Rake::Task['p2'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
+      assert(File.exist?(File.join(dir, 'pgsql/pgsql.log')))
     end
   end
 end
