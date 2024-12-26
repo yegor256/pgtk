@@ -143,9 +143,12 @@ class TestPool < Minitest::Test
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
       qbash("kill -QUIT #{pid}", log: $stdout)
       qbash("kill -TERM #{pid}", log: $stdout)
+      cycle = 0
       loop do
         TCPSocket.new('localhost', port)
         sleep(0.1)
+        cycle += 1
+        raise "Can't stop running postgres at port #{port}, for some reason" if cycle > 20
       rescue StandardError => e
         puts e.message
         break
