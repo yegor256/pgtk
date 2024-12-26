@@ -23,6 +23,7 @@ docker:
 assets:
   rubygems.yml: yegor256/home#assets/rubygems.yml
 install: |
+  sudo hostname docker
   sudo apt-get update
   sudo apt-get install -y libpq-dev postgresql-client postgresql
   sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/initdb)" /bin/initdb
