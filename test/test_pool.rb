@@ -148,7 +148,10 @@ class TestPool < Minitest::Test
         TCPSocket.new('localhost', port)
         sleep(0.1)
         cycle += 1
-        raise "Can't stop running postgres at port #{port}, for some reason" if cycle > 20
+        if cycle > 20
+          qbash('ps -a')
+          raise "Can't stop running postgres at port #{port}, for some reason"
+        end
       rescue StandardError => e
         puts e.message
         break
