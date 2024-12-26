@@ -64,7 +64,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     home = File.expand_path(@dir)
     FileUtils.rm_rf(home) if @fresh_start
     raise "Directory/file #{home} is present, use fresh_start=true" if File.exist?(home)
-    out = "2>&1 #{@quiet ? '>/dev/null' : ''}"
+    stdout = @quiet ? nil : $stdout
     Tempfile.open do |pwfile|
       File.write(pwfile.path, @password)
       qbash(
@@ -75,9 +75,9 @@ class Pgtk::PgsqlTask < Rake::TaskLib
           '--username',
           Shellwords.escape(@user),
           '--pwfile',
-          Shellwords.escape(pwfile.path),
-          out
-        ]
+          Shellwords.escape(pwfile.path)
+        ],
+        log: stdout
       )
     end
     port = @port
@@ -111,12 +111,13 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     begin
       qbash(
         [
-          "createdb -h localhost -p #{port}",
-          '--username',
-          Shellwords.escape(@user),
-          Shellwords.escape(@dbname),
-          out
-        ]
+          'createdb',
+          '--host', 'localhost',
+          '--port', Shellwords.escape(port),
+          '--username', Shellwords.escape(@user),
+          Shellwords.escape(@dbname)
+        ],
+        log: stdout
       )
     rescue StandardError => e
       puts e.message

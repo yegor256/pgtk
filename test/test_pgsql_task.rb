@@ -47,4 +47,21 @@ class TestPgsqlTask < Minitest::Test
       assert(File.exist?(File.join(dir, 'pgsql/pgsql.log')))
     end
   end
+
+  def test_not_quiet
+    Dir.mktmpdir 'test' do |dir|
+      Pgtk::PgsqlTask.new(:p3) do |t|
+        t.dir = File.join(dir, 'pgsql')
+        t.user = 'hello'
+        t.password = 'the password'
+        t.dbname = 'test'
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = false
+      end
+      Rake::Task['p3'].invoke
+      yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
+      assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
+      assert(File.exist?(File.join(dir, 'pgsql/pgsql.log')))
+    end
+  end
 end
