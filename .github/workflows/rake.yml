@@ -45,6 +45,6 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
       - run: bundle update
-      - run: bundle exec ruby test/test_pool.rb -n test_reconnects_on_pg_reboot
       - run: bundle exec rake
