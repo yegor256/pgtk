@@ -141,15 +141,20 @@ class TestPool < Minitest::Test
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
-      qbash("kill -KILL #{pid}")
-      sleep(1)
-      task.reenable
-      task.invoke
+      qbash("kill -QUIT #{pid}", log: $stdout)
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
       end
-      sleep(1)
-      pool.exec('SELECT * FROM pg_catalog.pg_tables')
+      task.reenable
+      task.invoke
+      loop do
+        pool.exec('SELECT * FROM pg_catalog.pg_tables')
+        break
+      rescue StandardError => e
+        puts e.message
+        sleep(0.1)
+        retry
+      end
     end
   end
 

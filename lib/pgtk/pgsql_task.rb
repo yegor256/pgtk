@@ -69,7 +69,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       File.write(pwfile.path, @password)
       qbash(
         [
-          'initdb --auth=trust',
+          'initdb',
+          '--auth=trust',
           '-D',
           Shellwords.escape(home),
           '--username',
@@ -104,7 +105,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     )
     File.write(File.join(@dir, 'pid'), pid)
     at_exit do
-      `kill -TERM #{pid}`
+      qbash("kill -TERM #{pid}", log: stdout)
       puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
     attempt = 0
