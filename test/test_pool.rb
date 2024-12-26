@@ -20,14 +20,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-require 'minitest/autorun'
-require 'tmpdir'
-require 'pg'
-require 'rake'
-require 'yaml'
 require 'loog'
-require_relative '../lib/pgtk/pgsql_task'
+require 'minitest/autorun'
+require 'pg'
+require 'qbash'
+require 'rake'
+require 'tmpdir'
+require 'yaml'
 require_relative '../lib/pgtk/liquibase_task'
+require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/pool'
 
 # Pool test.
@@ -140,13 +141,14 @@ class TestPool < Minitest::Test
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
-      `kill -KILL #{pid}`
-      sleep 1
+      qbash("kill -KILL #{pid}")
+      sleep(1)
       task.reenable
       task.invoke
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
       end
+      sleep(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
     end
   end

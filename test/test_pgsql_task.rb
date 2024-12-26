@@ -21,8 +21,8 @@
 # SOFTWARE.
 
 require 'minitest/autorun'
-require 'tmpdir'
 require 'rake'
+require 'tmpdir'
 require 'yaml'
 require_relative '../lib/pgtk/pgsql_task'
 
