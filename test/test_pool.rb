@@ -140,20 +140,21 @@ class TestPool < Minitest::Test
       )
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
-      pid = File.read(File.join(dir, 'pgsql/pid')).to_i
       qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: $stdout)
       cycle = 0
       loop do
-        TCPSocket.new('localhost', port)
-        sleep(0.1)
-        cycle += 1
-        if cycle > 50
-          qbash('ps -ax | grep postgres')
-          raise "Can't stop running postgres at port #{port}, for some reason"
+        begin
+          TCPSocket.new('localhost', port)
+          sleep(0.1)
+          cycle += 1
+          if cycle > 50
+            qbash('ps -ax | grep postgres')
+            raise "Can't stop running postgres at port #{port}, for some reason"
+          end
+        rescue StandardError => e
+          puts e.message
+          break
         end
-      rescue StandardError => e
-        puts e.message
-        break
       end
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
@@ -161,12 +162,14 @@ class TestPool < Minitest::Test
       task.reenable
       task.invoke
       loop do
-        pool.exec('SELECT * FROM pg_catalog.pg_tables')
-        break
-      rescue StandardError => e
-        puts e.message
-        sleep(0.1)
-        retry
+        begin
+          pool.exec('SELECT * FROM pg_catalog.pg_tables')
+          break
+        rescue StandardError => e
+          puts e.message
+          sleep(0.1)
+          retry
+        end
       end
     end
   end
