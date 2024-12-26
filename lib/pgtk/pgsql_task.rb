@@ -87,17 +87,18 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     else
       puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
     end
+    cmd = [
+      'postgres',
+      '-k', Shellwords.escape(home),
+      '-D', Shellwords.escape(home),
+      '-c', Shellwords.escape("log_directory=#{home}"),
+      '-c', 'logging_collector=on',
+      '-c', 'log_statement=all',
+      '-c', 'log_filename=pgsql.log',
+      "--port=#{port}"
+    ].join(' ')
     pid = Process.spawn(
-      [
-        'postgres',
-        '-k', Shellwords.escape(home),
-        '-D', Shellwords.escape(home),
-        '-c', Shellwords.escape("log_directory=#{home}"),
-        '-c', 'logging_collector=on',
-        '-c', 'log_statement=all',
-        '-c', 'log_filename=pgsql.log',
-        "--port=#{port}"
-      ].join(' '),
+      cmd,
       $stdout => File.join(home, 'stdout.txt'),
       $stderr => File.join(home, 'stderr.txt')
     )
@@ -107,16 +108,16 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
     attempt = 0
-    loop do
-      TCPSocket.new 'localhost', port
-      break
-    rescue
+    begin
+      TCPSocket.new('localhost', port)
+    rescue StandardError => e
       sleep(0.1)
       attempt += 1
-      if attempt > 10
-        puts File.read(File.join(home, 'stdout.txt'))
-        puts File.read(File.join(home, 'stderr.txt'))
-        raise "Failed to start PostgreSQL database server"
+      if attempt > 50
+        puts "+ #{cmd}"
+        puts "stdout:\n#{File.read(File.join(home, 'stdout.txt'))}"
+        puts "stderr:\n#{File.read(File.join(home, 'stderr.txt'))}"
+        raise "Failed to start PostgreSQL database server on port #{port}: #{e.message}"
       end
       retry
     end
