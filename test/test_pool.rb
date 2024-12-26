@@ -142,6 +142,13 @@ class TestPool < Minitest::Test
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
       qbash("kill -QUIT #{pid}", log: $stdout)
+      loop do
+        TCPSocket.new('localhost', port)
+        sleep(0.1)
+      rescue StandardError => e
+        puts e.message
+        break
+      end
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
       end
