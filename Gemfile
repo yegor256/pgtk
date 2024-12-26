@@ -23,7 +23,7 @@
 source 'https://rubygems.org'
 gemspec
 
-gem 'minitest', '5.25.1', require: false
+gem 'minitest', '5.25.4', require: false
 gem 'minitest-reporters', '~>1.7', require: false
 gem 'rack', '3.1.8', require: false
 gem 'rake', '13.2.1', require: false
