@@ -142,6 +142,7 @@ class TestPool < Minitest::Test
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
       qbash("kill -QUIT #{pid}", log: $stdout)
+      qbash("kill -TERM #{pid}", log: $stdout)
       loop do
         TCPSocket.new('localhost', port)
         sleep(0.1)
