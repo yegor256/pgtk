@@ -141,14 +141,13 @@ class TestPool < Minitest::Test
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       pid = File.read(File.join(dir, 'pgsql/pid')).to_i
-      qbash("kill -QUIT #{pid}", log: $stdout)
-      qbash("kill -TERM #{pid}", log: $stdout)
+      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: $stdout)
       cycle = 0
       loop do
         TCPSocket.new('localhost', port)
         sleep(0.1)
         cycle += 1
-        if cycle > 20
+        if cycle > 50
           qbash('ps -ax | grep postgres')
           raise "Can't stop running postgres at port #{port}, for some reason"
         end
