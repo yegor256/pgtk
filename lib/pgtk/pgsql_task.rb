@@ -106,26 +106,30 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       `kill -TERM #{pid}`
       puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
-    sleep 1
     attempt = 0
-    begin
-      qbash(
-        [
-          'createdb',
-          '--host', 'localhost',
-          '--port', Shellwords.escape(port),
-          '--username', Shellwords.escape(@user),
-          Shellwords.escape(@dbname)
-        ],
-        log: stdout
-      )
-    rescue StandardError => e
-      puts e.message
-      sleep(5)
+    loop do
+      TCPSocket.new 'localhost', port
+      break
+    rescue
+      sleep(0.1)
       attempt += 1
-      raise if attempt > 10
+      if attempt > 10
+        puts File.read(File.join(home, 'stdout.txt'))
+        puts File.read(File.join(home, 'stderr.txt'))
+        raise "Failed to start PostgreSQL database server"
+      end
       retry
     end
+    qbash(
+      [
+        'createdb',
+        '--host', 'localhost',
+        '--port', Shellwords.escape(port),
+        '--username', Shellwords.escape(@user),
+        Shellwords.escape(@dbname)
+      ],
+      log: stdout
+    )
     File.write(
       @yaml,
       {
