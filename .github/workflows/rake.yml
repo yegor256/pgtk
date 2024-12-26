@@ -27,8 +27,8 @@ on:
     branches:
       - master
 jobs:
-  test:
-    name: test
+  rake:
+    name: rake
     strategy:
       matrix:
         os: [ubuntu-24.04]
@@ -44,6 +44,5 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      - run: bundle install
+      - run: bundle update
       - run: bundle exec rake
