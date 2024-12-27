@@ -82,7 +82,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     Dir.chdir(File.dirname(@master)) do
       qbash(
         [
-          'mvn verify',
+          'mvn', 'verify',
           '--errors',
           '--batch-mode',
           '--fail-fast',
@@ -94,14 +94,13 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--define',
           "postgresql.version=#{@postgresql_version}",
           '--define',
-          "liquibase.searchPath=#{File.dirname(@master)}",
+          Shellwords.escape("liquibase.searchPath=#{File.dirname(@master)}"),
           '--define',
-          "liquibase.changeLogFile=#{old ? @master : File.basename(@master)}",
+          Shellwords.escape("liquibase.changeLogFile=#{old ? @master : File.basename(@master)}"),
           '--define',
-          "liquibase.url=#{Shellwords.escape(url)}",
+          Shellwords.escape("liquibase.url=#{url}"),
           '--define',
-          "liquibase.password=#{Shellwords.escape(password)}",
-          '2>&1'
+          Shellwords.escape("liquibase.password=#{password}")
         ]
       )
     end
