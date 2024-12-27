@@ -50,6 +50,10 @@ Pgtk::PgsqlTask.new :pgsql do |t|
   t.password = 'test'
   t.dbname = 'test'
   t.yaml = 'target/pgsql-config.yml' # YAML file to be created with connection details
+  t.config = { # list of PostgreSQL configuration options
+    log_min_messages: 'ERROR',
+    log_filename: 'target/pg.log'
+  }
 end
 ```
 

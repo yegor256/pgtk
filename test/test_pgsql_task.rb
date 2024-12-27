@@ -40,11 +40,13 @@ class TestPgsqlTask < Minitest::Test
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
+        t.config = {
+          log_min_error_statement: 'ERROR'
+        }
       end
       Rake::Task['p2'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
-      assert(File.exist?(File.join(dir, 'pgsql/pgsql.log')))
     end
   end
 
@@ -57,11 +59,17 @@ class TestPgsqlTask < Minitest::Test
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = false
+        t.config = {
+          log_directory: dir,
+          logging_collector: 'on',
+          log_statement: 'all',
+          log_filename: 'pgsql.log'
+        }
       end
       Rake::Task['p3'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
-      assert(File.exist?(File.join(dir, 'pgsql/pgsql.log')))
+      assert(File.exist?(File.join(dir, 'pgsql.log')))
     end
   end
 end

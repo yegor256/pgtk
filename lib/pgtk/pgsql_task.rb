@@ -36,7 +36,7 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2024 Yegor Bugayenko
 # License:: MIT
 class Pgtk::PgsqlTask < Rake::TaskLib
-  attr_accessor :name, :dir, :fresh_start, :user, :password, :dbname, :yaml, :quiet, :port
+  attr_accessor :name, :dir, :fresh_start, :user, :password, :dbname, :yaml, :quiet, :port, :config
 
   def initialize(*args, &task_block)
     super()
@@ -44,6 +44,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     @fresh_start = false
     @quiet = false
     @user = 'test'
+    @config = {}
     @password = 'test'
     @dbname = 'test'
     @port = nil
@@ -92,10 +93,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       'postgres',
       '-k', Shellwords.escape(home),
       '-D', Shellwords.escape(home),
-      '-c', Shellwords.escape("log_directory=#{home}"),
-      '-c', 'logging_collector=on',
-      '-c', 'log_statement=all',
-      '-c', 'log_filename=pgsql.log',
+      @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
       "--port=#{port}"
     ].join(' ')
     pid = Process.spawn(
