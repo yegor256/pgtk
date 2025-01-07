@@ -70,6 +70,7 @@ class TestLiquibaseTask < Minitest::Test
         t.yaml = File.join(dir, 'xxx.yml')
         t.postgresql_version = '42.7.1'
         t.liquibase_version = '4.25.1'
+        t.quiet = true
       end
       Rake::Task['liquibase'].invoke
     end
@@ -79,6 +80,7 @@ class TestLiquibaseTask < Minitest::Test
     Pgtk::LiquibaseTask.new(:lb) do |t|
       t.master = 'the-file-doesnt-exist.xml'
       t.yaml = { 'pgsql' => {} }
+      t.quiet = true
     end
     ex = assert_raises do
       Rake::Task['lb'].invoke

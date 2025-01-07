@@ -139,7 +139,7 @@ class TestPool < Minitest::Test
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = false
+        t.quiet = true
         t.fresh_start = true
         t.port = port
       end
@@ -147,7 +147,7 @@ class TestPool < Minitest::Test
       task.invoke
       pool = Pgtk::Pool.new(
         Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
-        log: Loog::VERBOSE
+        log: Loog::NULL
       )
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
