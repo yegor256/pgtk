@@ -31,6 +31,9 @@ require_relative 'wire'
 # License:: MIT
 class Pgtk::Pool
   # Constructor.
+  #
+  # @param [Pgtk::Wire] wire The wire
+  # @param [Object] log The log
   def initialize(wire, log: Loog::NULL)
     @wire = wire
     @log = log
@@ -38,6 +41,8 @@ class Pgtk::Pool
   end
 
   # Get the version of PostgreSQL server.
+  #
+  # @return [String] Version of PostgreSQL server
   def version
     @version ||= exec('SHOW server_version')[0]['server_version'].split[0]
   end
@@ -48,6 +53,8 @@ class Pgtk::Pool
   # keep in mind that not all servers will allow you to have many connections
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
+  #
+  # @param [Integer] max Total amount of PostgreSQL connections in the pool
   def start(max = 8)
     max.times do
       @pool << @wire.connection
@@ -101,6 +108,11 @@ class Pgtk::Pool
   #
   # More details about +exec_params+, which is called here, you can find
   # here: https://www.rubydoc.info/gems/pg/0.17.1/PG%2FConnection:exec_params
+  #
+  # @param [String] query The SQL query with params inside (possibly)
+  # @param [Array] args List of arguments
+  # @param [Integer] result Should be 0 for text results, 1 for binary
+  # @yield [Hash] Rows
   def exec(query, args = [], result = 0, &block)
     connect do |c|
       t = Txn.new(c, @log)
@@ -142,17 +154,33 @@ class Pgtk::Pool
       @log = log
     end
 
+    # Exec a single parameterized command.
+    # @param [String] query The SQL query with params inside (possibly)
+    # @param [Array] args List of arguments
+    # @param [Integer] result Should be 0 for text results, 1 for binary
+    # @yield [Hash] Rows
     def exec(query, args = [], result = 0)
       start = Time.now
       sql = query.is_a?(Array) ? query.join(' ') : query
       begin
-        out = @conn.exec_params(sql, args, result) do |res|
-          if block_given?
-            yield res
+        out =
+          if args.empty?
+            @conn.exec(sql) do |res|
+              if block_given?
+                yield res
+              else
+                res.each.to_a
+              end
+            end
           else
-            res.each.to_a
+            @conn.exec_params(sql, args, result) do |res|
+              if block_given?
+                yield res
+              else
+                res.each.to_a
+              end
+            end
           end
-        end
       rescue StandardError => e
         @log.error("#{sql}: #{e.message}")
         raise e

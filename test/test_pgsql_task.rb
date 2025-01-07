@@ -58,7 +58,7 @@ class TestPgsqlTask < Minitest::Test
         t.password = 'the password'
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = false
+        t.quiet = true
         t.config = {
           log_directory: dir,
           logging_collector: 'on',

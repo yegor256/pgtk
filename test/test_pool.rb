@@ -54,6 +54,17 @@ class TestPool < Minitest::Test
     end
   end
 
+  def test_complex_query
+    bootstrap do |pool|
+      pool.exec(
+        "
+        INSERT INTO book (title) VALUES ('one');
+        INSERT INTO book (title) VALUES ('two');
+        "
+      )
+    end
+  end
+
   def test_logs_sql
     log = Loog::Buffer.new
     bootstrap(log: log) do |pool|
@@ -176,7 +187,7 @@ class TestPool < Minitest::Test
 
   private
 
-  def bootstrap(log: Loog::VERBOSE)
+  def bootstrap(log: Loog::NULL)
     Dir.mktmpdir 'test' do |dir|
       id = rand(100..999)
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
