@@ -151,7 +151,7 @@ class TestPool < Minitest::Test
       )
       pool.start(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
-      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: $stdout)
+      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
       cycle = 0
       loop do
         begin
