@@ -28,7 +28,7 @@ gem 'minitest-reporters', '~>1.7', require: false
 gem 'rack', '3.1.8', require: false
 gem 'rake', '13.2.1', require: false
 gem 'rspec-rails', '7.1.0', require: false
-gem 'rubocop', '1.69.2', require: false
+gem 'rubocop', '1.70.0', require: false
 gem 'rubocop-rspec', '3.3.0', require: false
 gem 'simplecov', '0.22.0', require: false
 gem 'simplecov-cobertura', '~>2.1'
