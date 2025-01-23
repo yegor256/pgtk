@@ -28,7 +28,7 @@ require_relative '../lib/pgtk/pgsql_task'
 
 # Pgsql rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2017-2019 Yegor Bugayenko
+# Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
 class TestPgsqlTask < Minitest::Test
   def test_basic
