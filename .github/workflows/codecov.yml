@@ -38,6 +38,7 @@ jobs:
           sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/initdb)" /bin/initdb
           sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/postgres)" /bin/postgres
           sudo ln -s "$(realpath /usr/lib/postgresql/*/bin/pg_ctl)" /bin/pg_ctl
+      - run: bundle config set --global path "$(pwd)/vendor/bundle"
       - run: bundle install
       - run: bundle exec rake
       - uses: codecov/codecov-action@v5
