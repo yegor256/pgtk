@@ -81,6 +81,8 @@ GEM
       ruby-progressbar
     nokogiri (1.18.2-arm64-darwin)
       racc (~> 1.4)
+    nokogiri (1.18.2-x64-mingw-ucrt)
+      racc (~> 1.4)
     nokogiri (1.18.2-x86_64-linux-gnu)
       racc (~> 1.4)
     parallel (1.26.3)
@@ -88,6 +90,7 @@ GEM
       ast (~> 2.4.1)
       racc
     pg (1.5.9)
+    pg (1.5.9-x64-mingw-ucrt)
     pp (0.6.2)
       prettyprint
     prettyprint (0.2.0)
@@ -198,6 +201,7 @@ PLATFORMS
   arm64-darwin-22
   arm64-darwin-23
   arm64-darwin-24
+  x64-mingw-ucrt
   x86_64-linux
 
 DEPENDENCIES
