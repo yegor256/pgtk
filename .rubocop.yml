@@ -27,7 +27,6 @@ AllCops:
   TargetRubyVersion: 2.3
   SuggestExtensions: false
   NewCops: enable
-
 Style/ClassAndModuleChildren:
   Enabled: false
 Layout/EndOfLine:
@@ -48,3 +47,7 @@ Metrics/PerceivedComplexity:
   Max: 15
 Metrics/ParameterLists:
   Max: 6
+required:
+  - rubocop-rake
+  - rubocop-minitest
+  - rubocop-performance
