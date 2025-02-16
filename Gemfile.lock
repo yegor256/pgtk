@@ -228,7 +228,7 @@ DEPENDENCIES
   rubocop-rspec (> 0)
   simplecov (= 0.22.0)
   simplecov-cobertura (~> 2.1)
-  xcop (= 0.7.1)
+  xcop (> 0)
   yard (= 0.9.37)
 
 BUNDLED WITH
