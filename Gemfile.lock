@@ -199,7 +199,7 @@ GEM
     unicode-emoji (4.0.4)
     uri (1.0.2)
     useragent (0.16.11)
-    xcop (0.7.1)
+    xcop (0.7.2)
       differ (~> 0.1.2)
       nokogiri (~> 1.10)
       rainbow (~> 3.0)
@@ -228,7 +228,7 @@ DEPENDENCIES
   rubocop-rspec (> 0)
   simplecov (= 0.22.0)
   simplecov-cobertura (~> 2.1)
-  xcop (= 0.7.1)
+  xcop (> 0)
   yard (= 0.9.37)
 
 BUNDLED WITH
