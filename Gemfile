@@ -35,5 +35,5 @@ gem 'rubocop-rake', '>0', require: false
 gem 'rubocop-rspec', '>0', require: false
 gem 'simplecov', '0.22.0', require: false
 gem 'simplecov-cobertura', '~>2.1'
-gem 'xcop', '0.7.1', require: false
+gem 'xcop', '>0', require: false
 gem 'yard', '0.9.37', require: false
