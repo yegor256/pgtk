@@ -16,7 +16,7 @@ def version
   Gem::Specification.load(Dir['*.gemspec'].first).version
 end
 
-task default: %i[clean test rubocop xcop copyright yard]
+task default: %i[clean test rubocop xcop yard]
 
 require 'rake/testtask'
 desc 'Run all unit tests'
@@ -43,15 +43,6 @@ end
 require 'xcop/rake_task'
 desc 'Validate all XML/XSL/XSD/HTML files for formatting'
 Xcop::RakeTask.new :xcop do |task|
-  task.license = 'LICENSE.txt'
   task.includes = ['**/*.xml', '**/*.xsl', '**/*.xsd', '**/*.html']
   task.excludes = ['target/**/*', 'coverage/**/*', 'vendor/**/*', 'doc/**/*']
-end
-
-task :copyright do
-  sh "grep -q -r '2019-#{Date.today.strftime('%Y')}' \
-    --include '*.rb' \
-    --include '*.txt' \
-    --include 'Rakefile' \
-    ."
 end

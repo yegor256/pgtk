@@ -10,6 +10,8 @@ AllCops:
   TargetRubyVersion: 2.3
   SuggestExtensions: false
   NewCops: enable
+Minitest/EmptyLineBeforeAssertionMethods:
+  Enabled: false
 Style/ClassAndModuleChildren:
   Enabled: false
 Layout/EndOfLine:

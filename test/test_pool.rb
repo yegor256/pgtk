@@ -23,7 +23,7 @@ class TestPool < Minitest::Test
     bootstrap do |pool|
       ver = pool.version
       assert(ver.start_with?('1'))
-      assert(!ver.include?(' '))
+      refute_includes(ver, ' ')
     end
   end
 
@@ -33,7 +33,7 @@ class TestPool < Minitest::Test
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['Elegant Objects']
       )[0]['id'].to_i
-      assert(id.positive?)
+      assert_predicate(id, :positive?)
     end
   end
 
@@ -55,17 +55,17 @@ class TestPool < Minitest::Test
         'INSERT INTO book (title) VALUES ($1)',
         ['Object Thinking']
       )
-      assert(log.to_s.include?('INSERT INTO book (title) VALUES ($1)'))
+      assert_includes(log.to_s, 'INSERT INTO book (title) VALUES ($1)')
     end
   end
 
   def test_logs_errors
     log = Loog::Buffer.new
     bootstrap(log: log) do |pool|
-      assert_raises PG::UndefinedTable do
+      assert_raises(PG::UndefinedTable) do
         pool.exec('INSERT INTO tableDoesNotExist (a) VALUES (42)')
       end
-      assert(log.to_s.include?('INSERT INTO tableDoesNotExist'))
+      assert_includes(log.to_s, 'INSERT INTO tableDoesNotExist')
     end
   end
 
@@ -81,23 +81,23 @@ class TestPool < Minitest::Test
           ['Object Thinking']
         )[0]['id'].to_i
       end
-      assert(id.positive?)
+      assert_predicate(id, :positive?)
     end
   end
 
   def test_transaction_with_error
     bootstrap do |pool|
       pool.exec('DELETE FROM book')
-      assert(pool.exec('SELECT * FROM book').empty?)
-      assert_raises do
+      assert_empty(pool.exec('SELECT * FROM book'))
+      assert_raises(StandardError) do
         pool.transaction do |t|
           t.exec('INSERT INTO book (title) VALUES ($1)', ['hey'])
           t.exec('INSERT INTO book (error_here) VALUES ($1)', ['hey'])
         end
       end
-      assert(pool.exec('SELECT * FROM book').empty?)
+      assert_empty(pool.exec('SELECT * FROM book'))
       pool.exec('INSERT INTO book (title) VALUES ($1)', ['another'])
-      assert(!pool.exec('SELECT * FROM book').empty?)
+      refute_empty(pool.exec('SELECT * FROM book'))
     end
   end
 
