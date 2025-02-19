@@ -32,7 +32,7 @@ Metrics/PerceivedComplexity:
   Max: 15
 Metrics/ParameterLists:
   Max: 6
-require:
+plugins:
   - rubocop-rake
   - rubocop-minitest
   - rubocop-performance
