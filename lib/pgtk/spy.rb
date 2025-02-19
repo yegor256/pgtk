@@ -23,14 +23,13 @@ class Pgtk::Spy
   end
 
   def exec(sql, *args)
-    @block.call(sql)
+    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql)
     @pool.exec(sql, *args)
   end
 
   def transaction
-    @block.call('txn')
     @pool.transaction do |t|
-      yield Spy.new(t, @block)
+      yield Pgtk::Spy.new(t, &@block)
     end
   end
 end

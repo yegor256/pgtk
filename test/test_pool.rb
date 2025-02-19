@@ -43,7 +43,7 @@ class TestPool < Minitest::Test
     bootstrap do |pool|
       pool = Pgtk::Spy.new(pool) { |sql| queries.append(sql) }
       pool.exec(
-        'INSERT INTO book (title) VALUES ($1)',
+        ['INSERT INTO book', '(title) VALUES ($1)'],
         ['Elegant Objects']
       )
     end
@@ -85,7 +85,7 @@ class TestPool < Minitest::Test
 
   def test_transaction
     bootstrap do |pool|
-      id = pool.transaction do |t|
+      id = Pgtk::Spy.new(pool).transaction do |t|
         t.exec('DELETE FROM book')
         t.exec(
           [
