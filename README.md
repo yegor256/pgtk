@@ -73,7 +73,7 @@ Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
 end
 ```
 
-The config.yml file should be in this format:
+The `config.yml` file should be in this format:
 
 ```yaml
 pgsql:
@@ -151,7 +151,14 @@ module Minitest
 end
 ```
 
-Should work.
+You can also track all SQL queries sent through, with the help of `Pgtk::Pool`:
+
+```ruby
+require 'pgtk/spy'
+pool = Pgtk::Spy.new(pool) do |sql|
+  # here, save this "sql" somewhere
+end
+```
 
 Well, it works in
 [netbout.com](https://github.com/yegor256/netbout),
