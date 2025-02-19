@@ -23,8 +23,10 @@ class Pgtk::Spy
   end
 
   def exec(sql, *args)
-    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql)
-    @pool.exec(sql, *args)
+    start = Time.now
+    ret = @pool.exec(sql, *args)
+    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - start)
+    ret
   end
 
   def transaction
