@@ -32,14 +32,14 @@ sudo apt-get install -y postgresql-10 postgresql-client-10
 sudo apt-get install -y default-jre maven
 ```
 
-Then, add this to your [`Gemfile`](https://bundler.io/gemfile.html):
+Then, add this to your [Gemfile](https://bundler.io/gemfile.html):
 
 ```ruby
 gem 'pgtk'
 ```
 
 Then, add this to your
-[`Rakefile`](https://github.com/ruby/rake/blob/master/doc/rakefile.rdoc):
+[Rakefile](https://github.com/ruby/rake/blob/master/doc/rakefile.rdoc):
 
 ```ruby
 require 'pgtk/pgsql_task'
