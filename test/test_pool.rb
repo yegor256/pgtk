@@ -13,6 +13,7 @@ require 'yaml'
 require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/pool'
+require_relative '../lib/pgtk/spy'
 
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -35,6 +36,19 @@ class TestPool < Minitest::Test
       )[0]['id'].to_i
       assert_predicate(id, :positive?)
     end
+  end
+
+  def test_with_spy
+    queries = []
+    bootstrap do |pool|
+      pool = Pgtk::Spy.new(pool) { |sql| queries.append(sql) }
+      pool.exec(
+        'INSERT INTO book (title) VALUES ($1)',
+        ['Elegant Objects']
+      )
+    end
+    assert_equal(1, queries.size)
+    assert_equal('INSERT INTO book (title) VALUES ($1)', queries.first)
   end
 
   def test_complex_query
