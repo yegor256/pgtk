@@ -32,6 +32,7 @@ class TestLiquibaseTask < Minitest::Test
         t.quiet = true
         t.postgresql_version = '42.7.0'
         t.liquibase_version = '3.2.2'
+        t.contexts = '!test'
       end
       Rake::Task['liquibase2'].invoke
     end
