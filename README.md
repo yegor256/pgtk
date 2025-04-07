@@ -1,12 +1,12 @@
 # Ruby + PostgreSQL + Liquibase + Rake
 
 [![EO principles respected here](https://www.elegantobjects.org/badge.svg)](https://www.elegantobjects.org)
-[![DevOps By Rultor.com](http://www.rultor.com/b/yegor256/pgtk)](http://www.rultor.com/p/yegor256/pgtk)
+[![DevOps By Rultor.com](https://www.rultor.com/b/yegor256/pgtk)](https://www.rultor.com/p/yegor256/pgtk)
 [![We recommend RubyMine](https://www.elegantobjects.org/rubymine.svg)](https://www.jetbrains.com/ruby/)
 
 [![rake](https://github.com/yegor256/pgtk/actions/workflows/rake.yml/badge.svg)](https://github.com/yegor256/pgtk/actions/workflows/rake.yml)
-[![PDD status](http://www.0pdd.com/svg?name=yegor256/pgtk)](http://www.0pdd.com/p?name=yegor256/pgtk)
-[![Gem Version](https://badge.fury.io/rb/pgtk.svg)](http://badge.fury.io/rb/pgtk)
+[![PDD status](https://www.0pdd.com/svg?name=yegor256/pgtk)](https://www.0pdd.com/p?name=yegor256/pgtk)
+[![Gem Version](https://badge.fury.io/rb/pgtk.svg)](https://badge.fury.io/rb/pgtk)
 [![Maintainability](https://api.codeclimate.com/v1/badges/3a5bebac001e5288b00d/maintainability)](https://codeclimate.com/github/yegor256/pgtk/maintainability)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/yegor256/pgtk/blob/master/LICENSE.txt)
 [![Test Coverage](https://img.shields.io/codecov/c/github/yegor256/pgtk.svg)](https://codecov.io/github/yegor256/pgtk?branch=master)
