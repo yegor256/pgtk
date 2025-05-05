@@ -36,3 +36,4 @@ Metrics/PerceivedComplexity:
   Max: 15
 Metrics/ParameterLists:
   Max: 6
+require: []
