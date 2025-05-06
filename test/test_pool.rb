@@ -21,7 +21,7 @@ require_relative '../lib/pgtk/spy'
 # License:: MIT
 class TestPool < Pgtk::Test
   def test_reads_version
-    bootstrap do |pool|
+    fake_pool do |pool|
       ver = pool.version
       assert(ver.start_with?('1'))
       refute_includes(ver, ' ')
@@ -29,7 +29,7 @@ class TestPool < Pgtk::Test
   end
 
   def test_basic
-    bootstrap do |pool|
+    fake_pool do |pool|
       id = pool.exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['Elegant Objects']
@@ -40,7 +40,7 @@ class TestPool < Pgtk::Test
 
   def test_with_spy
     queries = []
-    bootstrap do |pool|
+    fake_pool do |pool|
       pool = Pgtk::Spy.new(pool) { |sql| queries.append(sql) }
       pool.exec(
         ['INSERT INTO book', '(title) VALUES ($1)'],
@@ -52,7 +52,7 @@ class TestPool < Pgtk::Test
   end
 
   def test_complex_query
-    bootstrap do |pool|
+    fake_pool do |pool|
       pool.exec(
         "
         INSERT INTO book (title) VALUES ('one');
@@ -64,7 +64,7 @@ class TestPool < Pgtk::Test
 
   def test_logs_sql
     log = Loog::Buffer.new
-    bootstrap(log: log) do |pool|
+    fake_pool(log: log) do |pool|
       pool.exec(
         'INSERT INTO book (title) VALUES ($1)',
         ['Object Thinking']
@@ -75,7 +75,7 @@ class TestPool < Pgtk::Test
 
   def test_logs_errors
     log = Loog::Buffer.new
-    bootstrap(log: log) do |pool|
+    fake_pool(log: log) do |pool|
       assert_raises(PG::UndefinedTable) do
         pool.exec('INSERT INTO tableDoesNotExist (a) VALUES (42)')
       end
@@ -84,7 +84,7 @@ class TestPool < Pgtk::Test
   end
 
   def test_transaction
-    bootstrap do |pool|
+    fake_pool do |pool|
       id = Pgtk::Spy.new(pool).transaction do |t|
         t.exec('DELETE FROM book')
         t.exec(
@@ -100,7 +100,7 @@ class TestPool < Pgtk::Test
   end
 
   def test_transaction_with_error
-    bootstrap do |pool|
+    fake_pool do |pool|
       pool.exec('DELETE FROM book')
       assert_empty(pool.exec('SELECT * FROM book'))
       assert_raises(StandardError) do
@@ -116,7 +116,7 @@ class TestPool < Pgtk::Test
   end
 
   def test_reconnects_on_pg_error
-    bootstrap do |pool|
+    fake_pool do |pool|
       assert_raises PG::UndefinedTable do
         pool.exec('SELECT * FROM thisiserror')
       end

@@ -38,7 +38,7 @@ require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 
 class Pgtk::Test < Minitest::Test
-  def bootstrap(log: Loog::NULL)
+  def fake_config
     Dir.mktmpdir 'test' do |dir|
       id = rand(100..999)
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
@@ -56,8 +56,14 @@ class Pgtk::Test < Minitest::Test
         t.quiet = true
       end
       Rake::Task["liquibase#{id}"].invoke
+      yield File.join(dir, 'cfg.yml')
+    end
+  end
+
+  def fake_pool(log: Loog::NULL)
+    fake_config do |f|
       pool = Pgtk::Pool.new(
-        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
+        Pgtk::Wire::Yaml.new(f),
         log: log
       )
       pool.start(1)

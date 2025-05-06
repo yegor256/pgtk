@@ -18,8 +18,15 @@ require_relative '../lib/pgtk/impatient'
 # Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
 class TestImpatient < Pgtk::Test
+  def test_takes_version
+    fake_pool do |pool|
+      v = Pgtk::Impatient.new(pool).version
+      refute_nil(v)
+    end
+  end
+
   def test_doesnt_interrupt
-    bootstrap do |pool|
+    fake_pool do |pool|
       id = Pgtk::Impatient.new(pool).exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['1984']
@@ -29,7 +36,7 @@ class TestImpatient < Pgtk::Test
   end
 
   def test_doesnt_interrupt_in_transaction
-    bootstrap do |pool|
+    fake_pool do |pool|
       Pgtk::Impatient.new(pool).transaction do |t|
         id = t.exec(
           'INSERT INTO book (title) VALUES ($1) RETURNING id',
