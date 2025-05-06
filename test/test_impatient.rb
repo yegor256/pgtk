@@ -18,7 +18,7 @@ require_relative '../lib/pgtk/impatient'
 # Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
 class TestImpatient < Pgtk::Test
-  def test_doesnt_interrup
+  def test_doesnt_interrupt
     bootstrap do |pool|
       id = Pgtk::Impatient.new(pool).exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
