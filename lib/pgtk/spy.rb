@@ -8,7 +8,39 @@ require 'loog'
 require_relative '../pgtk'
 require_relative 'wire'
 
-# A pool that spies on another pool.
+# Spy is a decorator for Pool that intercepts and tracks SQL queries.
+# It provides observability into database operations by invoking a callback
+# with the SQL query and its execution time for each database operation.
+#
+# This class implements the same interface as Pool, but adds instrumentation
+# functionality while delegating actual database operations to the decorated pool.
+# Use Spy for debugging, performance monitoring, or audit logging.
+#
+# Basic usage:
+#
+#   # Create and configure a regular pool
+#   pool = Pgtk::Pool.new(wire).start(4)
+#
+#   # Wrap the pool in a spy that tracks all executed queries
+#   queries = []
+#   spy = Pgtk::Spy.new(pool) do |sql, duration|
+#     puts "Query: #{sql}"
+#     puts "Duration: #{duration} seconds"
+#     queries << sql
+#   end
+#
+#   # Use the spy just like a regular pool, with automatic tracking
+#   spy.exec('SELECT * FROM users')
+#
+#   # Transactions also track each query inside the transaction
+#   spy.transaction do |t|
+#     t.exec('UPDATE users SET active = true WHERE id = $1', [42])
+#     t.exec('INSERT INTO audit_log (user_id, action) VALUES ($1, $2)', [42, 'activated'])
+#   end
+#
+#   # Examine collected queries for analysis
+#   puts "Total queries: #{queries.size}"
+#   puts "First query: #{queries.first}"
 #
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko

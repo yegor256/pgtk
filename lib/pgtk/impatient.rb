@@ -6,8 +6,46 @@
 require 'timeout'
 require_relative '../pgtk'
 
-# An impatient decorator of a pool — it doesn't wait too long on every
-# request, but terminates them and fails.
+# Impatient is a decorator for Pool that enforces timeouts on all database operations.
+# It ensures that SQL queries don't run indefinitely, which helps prevent application
+# hangs and resource exhaustion when database operations are slow or stalled.
+#
+# This class implements the same interface as Pool but wraps each database operation
+# in a timeout block. If a query exceeds the specified timeout, it raises a Timeout::Error
+# exception, allowing the application to handle slow queries gracefully.
+#
+# Basic usage:
+#
+#   # Create and configure a regular pool
+#   pool = Pgtk::Pool.new(wire).start(4)
+#
+#   # Wrap the pool in an impatient decorator with a 2-second timeout
+#   impatient = Pgtk::Impatient.new(pool, 2)
+#
+#   # Execute queries with automatic timeout enforcement
+#   begin
+#     impatient.exec('SELECT * FROM large_table WHERE complex_condition')
+#   rescue Timeout::Error
+#     puts "Query timed out after 2 seconds"
+#   end
+#
+#   # Transactions also enforce timeouts on each query
+#   begin
+#     impatient.transaction do |t|
+#       t.exec('UPDATE large_table SET processed = true')
+#       t.exec('DELETE FROM queue WHERE processed = true')
+#     end
+#   rescue Timeout::Error
+#     puts "Transaction timed out"
+#   end
+#
+#   # Combining with Spy for timeout monitoring
+#   spy = Pgtk::Spy.new(impatient) do |sql, duration|
+#     puts "Query completed in #{duration} seconds: #{sql}"
+#   end
+#
+#   # Now queries are both timed and monitored
+#   spy.exec('SELECT * FROM users')
 #
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko

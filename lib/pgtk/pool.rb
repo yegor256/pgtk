@@ -8,7 +8,40 @@ require 'loog'
 require_relative '../pgtk'
 require_relative 'wire'
 
-# Pool.
+# Pool provides a connection pool for PostgreSQL database connections.
+# It manages a fixed number of connections to optimize performance and
+# resource usage while providing a simple interface for database operations.
+#
+# The Pool class handles connection lifecycle, reconnects on errors,
+# and provides transaction support. It's the core class for interacting
+# with a PostgreSQL database in this library.
+#
+# Basic usage:
+#
+#   # Create a wire that knows how to connect to PostgreSQL
+#   wire = Pgtk::Wire::Direct.new(
+#     host: 'localhost',
+#     port: 5432,
+#     dbname: 'mydatabase',
+#     user: 'postgres',
+#     password: 'secret'
+#   )
+#
+#   # Create and start a connection pool with 4 connections
+#   pool = Pgtk::Pool.new(wire).start(4)
+#
+#   # Execute a simple query
+#   pool.exec('SELECT * FROM users')
+#
+#   # Execute a parameterized query
+#   pool.exec('SELECT * FROM users WHERE email = $1', ['user@example.com'])
+#
+#   # Use transactions for multiple operations
+#   pool.transaction do |t|
+#     t.exec('UPDATE accounts SET balance = balance - $1 WHERE id = $2', [100, 42])
+#     t.exec('UPDATE accounts SET balance = balance + $1 WHERE id = $2', [100, 43])
+#   end
+#
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
