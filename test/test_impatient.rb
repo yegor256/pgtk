@@ -27,4 +27,16 @@ class TestImpatient < Pgtk::Test
       assert_predicate(id, :positive?)
     end
   end
+
+  def test_doesnt_interrupt_in_transaction
+    bootstrap do |pool|
+      Pgtk::Impatient.new(pool).transaction do |t|
+        id = t.exec(
+          'INSERT INTO book (title) VALUES ($1) RETURNING id',
+          ['1984']
+        ).first['id'].to_i
+        assert_predicate(id, :positive?)
+      end
+    end
+  end
 end
