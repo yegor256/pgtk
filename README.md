@@ -99,7 +99,7 @@ bundle exec rake pgsql liquibase
 
 A temporary PostgreSQL server will be started and the entire set of
 Liquibase SQL changes will be applied. You will be able to connect
-to it from your application, using the file `target/config.yml`.
+to it from your application, using the file `target/pgsql-config.yml`.
 
 From inside your app you may find this class useful:
 
@@ -123,7 +123,7 @@ Now you can fetch some data from the DB:
 name = pgsql.exec('SELECT name FROM user WHERE id = $1', [id])[0]['name']
 ```
 
-You may also use it if you need to run a transaction:
+You may also use it when you need to run a transaction:
 
 ```ruby
 pgsql.transaction do |t|
@@ -132,7 +132,7 @@ pgsql.transaction do |t|
 end
 ```
 
-To make your PostgreSQL database visible in your unit test, I would
+To make your PostgreSQL database visible in your unit tests, I would
 recommend you create a method `test_pgsql` in your `test__helper.rb` file
 (which is `required` in all unit tests) and implement it like this:
 
@@ -143,7 +143,6 @@ require 'pgtk/pool'
 module Minitest
   class Test
     def test_pgsql
-      config = YAML.load_file()
       @@test_pgsql ||= Pgtk::Pool.new(
         Pgtk::Wire::Yaml.new('target/pgsql-config.yml')
       ).start
@@ -152,7 +151,7 @@ module Minitest
 end
 ```
 
-You can also track all SQL queries sent through, with the help of `Pgtk::Pool`:
+You can also track all SQL queries sent through the pool, with the help of `Pgtk::Spy`:
 
 ```ruby
 require 'pgtk/spy'

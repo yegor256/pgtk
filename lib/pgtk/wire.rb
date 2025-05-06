@@ -21,10 +21,16 @@ end
 # License:: MIT
 class Pgtk::Wire::Direct
   # Constructor.
+  #
+  # @param [String] host Host name of the PostgreSQL server
+  # @param [Integer] port Port number of the PostgreSQL server
+  # @param [String] dbname Database name
+  # @param [String] user Username
+  # @param [String] password Password
   def initialize(host:, port:, dbname:, user:, password:)
     raise "The host can't be nil" if host.nil?
     @host = host
-    raise "The host can't be nil" if host.nil?
+    raise "The port can't be nil" if port.nil?
     @port = port
     @dbname = dbname
     @user = user
@@ -46,6 +52,8 @@ end
 # License:: MIT
 class Pgtk::Wire::Env
   # Constructor.
+  #
+  # @param [String] var The name of the environment variable with the connection URL
   def initialize(var = 'DATABASE_URL')
     raise "The name of the environment variable can't be nil" if var.nil?
     @var = var
@@ -72,6 +80,9 @@ end
 # License:: MIT
 class Pgtk::Wire::Yaml
   # Constructor.
+  #
+  # @param [String] file Path to the YAML configuration file
+  # @param [String] node The root node name in the YAML file containing PostgreSQL configuration
   def initialize(file, node = 'pgsql')
     raise "The name of the file can't be nil" if file.nil?
     @file = file
@@ -83,12 +94,13 @@ class Pgtk::Wire::Yaml
   def connection
     raise "The file #{@file.inspect} not found" unless File.exist?(@file)
     cfg = YAML.load_file(@file)
+    raise "The node '#{@node}' not found in YAML file #{@file.inspect}" unless cfg[@node]
     Pgtk::Wire::Direct.new(
-      host: cfg['pgsql']['host'],
-      port: cfg['pgsql']['port'],
-      dbname: cfg['pgsql']['dbname'],
-      user: cfg['pgsql']['user'],
-      password: cfg['pgsql']['password']
+      host: cfg[@node]['host'],
+      port: cfg[@node]['port'],
+      dbname: cfg[@node]['dbname'],
+      user: cfg[@node]['user'],
+      password: cfg[@node]['password']
     ).connection
   end
 end

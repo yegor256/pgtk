@@ -16,8 +16,38 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
 class Pgtk::LiquibaseTask < Rake::TaskLib
-  attr_accessor :name, :master, :yaml, :quiet, :liquibase_version, :postgresql_version, :contexts
+  # Task name
+  # @return [Symbol]
+  attr_accessor :name
 
+  # Path to Liquibase master XML file
+  # @return [String]
+  attr_accessor :master
+
+  # Path to YAML file with PostgreSQL connection details
+  # @return [String, Array<String>]
+  attr_accessor :yaml
+
+  # Whether to suppress output
+  # @return [Boolean]
+  attr_accessor :quiet
+
+  # Liquibase version to use
+  # @return [String]
+  attr_accessor :liquibase_version
+
+  # PostgreSQL JDBC driver version to use
+  # @return [String]
+  attr_accessor :postgresql_version
+
+  # Liquibase contexts to apply
+  # @return [String]
+  attr_accessor :contexts
+
+  # Initialize a new Liquibase task.
+  #
+  # @param [Array] args Task arguments
+  # @yield [Pgtk::LiquibaseTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
     @name = args.shift || :liquibase

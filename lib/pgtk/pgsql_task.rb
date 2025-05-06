@@ -19,8 +19,50 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
 class Pgtk::PgsqlTask < Rake::TaskLib
-  attr_accessor :name, :dir, :fresh_start, :user, :password, :dbname, :yaml, :quiet, :port, :config
+  # Task name
+  # @return [Symbol]
+  attr_accessor :name
 
+  # Directory where PostgreSQL server files will be stored
+  # @return [String]
+  attr_accessor :dir
+
+  # Whether to delete the PostgreSQL data directory on each run
+  # @return [Boolean]
+  attr_accessor :fresh_start
+
+  # PostgreSQL username
+  # @return [String]
+  attr_accessor :user
+
+  # PostgreSQL password
+  # @return [String]
+  attr_accessor :password
+
+  # PostgreSQL database name
+  # @return [String]
+  attr_accessor :dbname
+
+  # Path to YAML file where configuration will be written
+  # @return [String]
+  attr_accessor :yaml
+
+  # Whether to suppress output
+  # @return [Boolean]
+  attr_accessor :quiet
+
+  # TCP port for PostgreSQL server (random if nil)
+  # @return [Integer, nil]
+  attr_accessor :port
+
+  # Configuration options for PostgreSQL server
+  # @return [Hash]
+  attr_accessor :config
+
+  # Initialize a new PostgreSQL server task.
+  #
+  # @param [Array] args Task arguments
+  # @yield [Pgtk::PgsqlTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
     @name = args.shift || :pgsql
