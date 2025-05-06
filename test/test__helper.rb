@@ -30,6 +30,7 @@ require 'minitest/autorun'
 require 'minitest/reporters'
 Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new]
 
+require 'logger'
 require 'loog'
 require 'rake'
 require 'rake/tasklib'

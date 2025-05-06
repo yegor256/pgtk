@@ -5,7 +5,6 @@
 
 require 'rubygems'
 require 'rake'
-require 'rdoc'
 require 'rake/clean'
 
 def name

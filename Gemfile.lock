@@ -3,6 +3,7 @@ PATH
   specs:
     pgtk (0.0.0)
       backtrace (> 0)
+      logger (> 0)
       loog (> 0)
       pg (~> 1.1)
       qbash (> 0)
@@ -23,6 +24,7 @@ GEM
     json (2.11.3)
     language_server-protocol (3.17.0.4)
     lint_roller (1.1.0)
+    logger (1.7.0)
     loog (0.6.0)
     minitest (5.25.5)
     minitest-reporters (1.7.1)

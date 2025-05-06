@@ -38,6 +38,17 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_queries_with_block
+    fake_pool do |pool|
+      pool.exec('INSERT INTO book (title) VALUES ($1)', ['1984'])
+      rows = []
+      pool.exec('SELECT * FROM book') do |row|
+        rows.append(row)
+      end
+      assert_equal(1, rows.size)
+    end
+  end
+
   def test_with_spy
     queries = []
     fake_pool do |pool|
