@@ -8,7 +8,8 @@ require 'loog'
 require_relative '../pgtk'
 require_relative 'wire'
 
-# A pool tha spies on another pool.
+# A pool that spies on another pool.
+#
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT

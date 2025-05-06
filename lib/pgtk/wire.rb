@@ -47,7 +47,7 @@ end
 class Pgtk::Wire::Env
   # Constructor.
   def initialize(var = 'DATABASE_URL')
-    raise "The name of the environmant variable can't be nil" if var.nil?
+    raise "The name of the environment variable can't be nil" if var.nil?
     @var = var
   end
 
