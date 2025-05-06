@@ -17,5 +17,6 @@ gem 'rubocop-rake', '>0', require: false
 gem 'rubocop-rspec', '>0', require: false
 gem 'simplecov', '~>0.22', require: false
 gem 'simplecov-cobertura', '~>2.1'
+gem 'timeout', '>0'
 gem 'xcop', '>0', require: false
 gem 'yard', '~>0.9', require: false

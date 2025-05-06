@@ -1,0 +1,30 @@
+# frozen_string_literal: true
+
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
+# SPDX-License-Identifier: MIT
+
+require 'loog'
+require 'pg'
+require 'qbash'
+require 'rake'
+require 'tmpdir'
+require 'yaml'
+require_relative 'test__helper'
+require_relative '../lib/pgtk/pool'
+require_relative '../lib/pgtk/impatient'
+
+# Pool test.
+# Author:: Yegor Bugayenko (yegor256@gmail.com)
+# Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
+# License:: MIT
+class TestImpatient < Pgtk::Test
+  def test_doesnt_interrup
+    bootstrap do |pool|
+      id = Pgtk::Impatient.new(pool).exec(
+        'INSERT INTO book (title) VALUES ($1) RETURNING id',
+        ['1984']
+      ).first['id'].to_i
+      assert_predicate(id, :positive?)
+    end
+  end
+end

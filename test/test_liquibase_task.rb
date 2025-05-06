@@ -3,10 +3,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
-require 'minitest/autorun'
 require 'tmpdir'
 require 'rake'
 require 'yaml'
+require_relative 'test__helper'
 require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/liquibase_task'
 
@@ -14,7 +14,7 @@ require_relative '../lib/pgtk/liquibase_task'
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
-class TestLiquibaseTask < Minitest::Test
+class TestLiquibaseTask < Pgtk::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
       Pgtk::PgsqlTask.new(:pgsql2) do |t|

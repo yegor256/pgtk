@@ -30,4 +30,38 @@ require 'minitest/autorun'
 require 'minitest/reporters'
 Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new]
 
+require 'loog'
+require 'rake'
+require 'rake/tasklib'
 require_relative '../lib/pgtk'
+require_relative '../lib/pgtk/liquibase_task'
+require_relative '../lib/pgtk/pgsql_task'
+
+class Pgtk::Test < Minitest::Test
+  def bootstrap(log: Loog::NULL)
+    Dir.mktmpdir 'test' do |dir|
+      id = rand(100..999)
+      Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
+        t.dir = File.join(dir, 'pgsql')
+        t.user = 'hello'
+        t.password = 'A B C привет ! & | !'
+        t.dbname = 'test'
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = true
+      end
+      Rake::Task["pgsql#{id}"].invoke
+      Pgtk::LiquibaseTask.new("liquibase#{id}") do |t|
+        t.master = File.join(__dir__, '../test-resources/master.xml')
+        t.yaml = File.join(dir, 'cfg.yml')
+        t.quiet = true
+      end
+      Rake::Task["liquibase#{id}"].invoke
+      pool = Pgtk::Pool.new(
+        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
+        log: log
+      )
+      pool.start(1)
+      yield pool
+    end
+  end
+end

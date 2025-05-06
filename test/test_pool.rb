@@ -4,12 +4,12 @@
 # SPDX-License-Identifier: MIT
 
 require 'loog'
-require 'minitest/autorun'
 require 'pg'
 require 'qbash'
 require 'rake'
 require 'tmpdir'
 require 'yaml'
+require_relative 'test__helper'
 require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/pool'
@@ -19,7 +19,7 @@ require_relative '../lib/pgtk/spy'
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
-class TestPool < Minitest::Test
+class TestPool < Pgtk::Test
   def test_reads_version
     bootstrap do |pool|
       ver = pool.version
@@ -179,35 +179,6 @@ class TestPool < Minitest::Test
           retry
         end
       end
-    end
-  end
-
-  private
-
-  def bootstrap(log: Loog::NULL)
-    Dir.mktmpdir 'test' do |dir|
-      id = rand(100..999)
-      Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
-        t.dir = File.join(dir, 'pgsql')
-        t.user = 'hello'
-        t.password = 'A B C привет ! & | !'
-        t.dbname = 'test'
-        t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = true
-      end
-      Rake::Task["pgsql#{id}"].invoke
-      Pgtk::LiquibaseTask.new("liquibase#{id}") do |t|
-        t.master = File.join(__dir__, '../test-resources/master.xml')
-        t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = true
-      end
-      Rake::Task["liquibase#{id}"].invoke
-      pool = Pgtk::Pool.new(
-        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
-        log: log
-      )
-      pool.start(1)
-      yield pool
     end
   end
 end

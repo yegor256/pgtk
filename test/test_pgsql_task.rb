@@ -3,17 +3,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
-require 'minitest/autorun'
 require 'rake'
 require 'tmpdir'
 require 'yaml'
+require_relative 'test__helper'
 require_relative '../lib/pgtk/pgsql_task'
 
 # Pgsql rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
 # License:: MIT
-class TestPgsqlTask < Minitest::Test
+class TestPgsqlTask < Pgtk::Test
   def test_basic
     Dir.mktmpdir 'test' do |dir|
       Pgtk::PgsqlTask.new(:p2) do |t|
