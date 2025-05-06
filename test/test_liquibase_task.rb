@@ -16,7 +16,7 @@ require_relative '../lib/pgtk/liquibase_task'
 # License:: MIT
 class TestLiquibaseTask < Pgtk::Test
   def test_basic
-    Dir.mktmpdir 'test' do |dir|
+    Dir.mktmpdir do |dir|
       Pgtk::PgsqlTask.new(:pgsql2) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
@@ -39,7 +39,7 @@ class TestLiquibaseTask < Pgtk::Test
   end
 
   def test_latest_version
-    Dir.mktmpdir 'test' do |dir|
+    Dir.mktmpdir do |dir|
       Pgtk::PgsqlTask.new(:pgsql) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'xxx'

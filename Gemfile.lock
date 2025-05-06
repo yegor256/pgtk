@@ -102,6 +102,7 @@ GEM
     unicode-display_width (3.1.4)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
+    wait_for (0.1.1)
     xcop (0.8.0)
       differ (~> 0.1.2)
       nokogiri (~> 1.10)
@@ -130,6 +131,7 @@ DEPENDENCIES
   simplecov (~> 0.22)
   simplecov-cobertura (~> 2.1)
   timeout (> 0)
+  wait_for (> 0)
   xcop (> 0)
   yard (~> 0.9)
 

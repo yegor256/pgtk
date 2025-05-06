@@ -47,6 +47,11 @@ class Pgtk::Wire::Direct
 end
 
 # Using ENV variable.
+#
+# The value of the variable should be in this format:
+#
+#   postgres://user:password@host:port/dbname
+#
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT

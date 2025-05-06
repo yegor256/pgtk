@@ -139,7 +139,7 @@ class TestPool < Pgtk::Test
 
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
-    Dir.mktmpdir 'test' do |dir|
+    Dir.mktmpdir do |dir|
       id = rand(100..999)
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
         t.dir = File.join(dir, 'pgsql')

@@ -171,6 +171,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         }
       }.to_yaml
     )
-    puts "PostgreSQL has been started in process ##{pid}, port #{port}" unless @quiet
+    return if @quiet
+    puts "PostgreSQL has been started in process ##{pid}, port #{port}"
+    puts "YAML config saved to #{@yaml}"
   end
 end

@@ -15,7 +15,7 @@ require_relative '../lib/pgtk/pgsql_task'
 # License:: MIT
 class TestPgsqlTask < Pgtk::Test
   def test_basic
-    Dir.mktmpdir 'test' do |dir|
+    Dir.mktmpdir do |dir|
       Pgtk::PgsqlTask.new(:p2) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
@@ -34,7 +34,7 @@ class TestPgsqlTask < Pgtk::Test
   end
 
   def test_not_quiet
-    Dir.mktmpdir 'test' do |dir|
+    Dir.mktmpdir do |dir|
       Pgtk::PgsqlTask.new(:p3) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'

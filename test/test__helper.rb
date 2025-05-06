@@ -40,24 +40,26 @@ require_relative '../lib/pgtk/pgsql_task'
 
 class Pgtk::Test < Minitest::Test
   def fake_config
-    Dir.mktmpdir 'test' do |dir|
-      id = rand(100..999)
+    Dir.mktmpdir do |dir|
+      id = rand(100_000..999_999)
+      f = File.join(dir, 'cfg.yml')
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
         t.dbname = 'test'
-        t.yaml = File.join(dir, 'cfg.yml')
+        t.yaml = f
         t.quiet = true
       end
       Rake::Task["pgsql#{id}"].invoke
       Pgtk::LiquibaseTask.new("liquibase#{id}") do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
-        t.yaml = File.join(dir, 'cfg.yml')
+        t.yaml = f
         t.quiet = true
       end
       Rake::Task["liquibase#{id}"].invoke
-      yield File.join(dir, 'cfg.yml')
+      assert_path_exists(f)
+      yield f
     end
   end
 
