@@ -41,7 +41,7 @@ require_relative '../lib/pgtk/pgsql_task'
 class Pgtk::Test < Minitest::Test
   def fake_config
     Dir.mktmpdir do |dir|
-      id = rand(100_000..999_999)
+      id = (Time.now.to_f * 1_000_000).to_i % 1_000_000
       f = File.join(dir, 'cfg.yml')
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
         t.dir = File.join(dir, 'pgsql')

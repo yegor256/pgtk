@@ -16,6 +16,8 @@ require_relative '../pgtk'
 #
 # Thread-safe with read-write locking.
 #
+# The implementation is very naive! Use it at your own risk.
+#
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
@@ -34,6 +36,7 @@ class Pgtk::Stash
   end
 
   # Execute a SQL query with optional caching.
+  #
   # Read queries are cached, while write queries bypass the cache and invalidate related entries.
   #
   # @param [String, Array<String>] query The SQL query to execute
@@ -76,6 +79,7 @@ class Pgtk::Stash
   end
 
   # Execute a database transaction.
+  #
   # Yields a new Stash that shares the same cache but uses the transaction connection.
   #
   # @yield [Baza::Stash] A stash connected to the transaction
@@ -87,6 +91,7 @@ class Pgtk::Stash
   end
 
   # Start a new connection pool with the given arguments.
+  #
   # @param args Arguments to pass to the underlying pool's start method
   # @return [Baza::Stash] A new stash that shares the same cache
   def start(*)
@@ -94,6 +99,7 @@ class Pgtk::Stash
   end
 
   # Get the PostgreSQL server version.
+  #
   # @return [String] Version string of the database server
   def version
     @pgsql.version
