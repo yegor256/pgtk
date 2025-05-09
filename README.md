@@ -151,7 +151,10 @@ module Minitest
 end
 ```
 
-You can also track all SQL queries sent through the pool, with the help of `Pgtk::Spy`:
+## Logging with `Pgtk::Spy`
+
+You can also track all SQL queries sent through the pool,
+with the help of `Pgtk::Spy`:
 
 ```ruby
 require 'pgtk/spy'
@@ -160,11 +163,46 @@ pool = Pgtk::Spy.new(pool) do |sql|
 end
 ```
 
-Well, it works in
+## Query Caching with `Pgtk::Stash`
+
+For applications with frequent read queries,
+you can use `Pgtk::Stash` to add a caching layer:
+
+```ruby
+require 'pgtk/stash'
+stash = Pgtk::Stash.new(pgsql)
+```
+
+`Stash` automatically caches read queries and invalidates the cache
+when tables are modified:
+
+```ruby
+# First execution runs the query against the database
+result1 = stash.exec('SELECT * FROM users WHERE id = $1', [123])
+# Second execution with the same query and parameters returns cached result
+result2 = stash.exec('SELECT * FROM users WHERE id = $1', [123])
+# This modifies the 'users' table, invalidating any cached queries for that table
+stash.exec('UPDATE users SET name = $1 WHERE id = $2', ['John', 123])
+# This will execute against the database again since cache was invalidated
+result3 = stash.exec('SELECT * FROM users WHERE id = $1', [123])
+```
+
+Note that the caching implementation is basic and only suitable
+for simple queries:
+
+1. Queries must reference tables (using `FROM` or `JOIN`)
+2. Cache is invalidated by table, not by specific rows
+3. Write operations (`INSERT`, `UPDATE`, `DELETE`) bypass
+the cache and invalidate all cached queries for affected tables
+
+## Some Examples
+
+This library works in
 [netbout.com](https://github.com/yegor256/netbout),
 [wts.zold.io](https://github.com/zold-io/wts.zold.io),
 [mailanes.com](https://github.com/yegor256/mailanes), and
 [0rsk.com](https://github.com/yegor256/0rsk).
+
 They are all open source, you can see how they use `pgtk`.
 
 ## How to contribute
