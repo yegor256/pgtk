@@ -29,7 +29,7 @@ class TestStash < Pgtk::Test
       first_result = stash.exec(query)
       second_result = stash.exec(query)
       assert_equal(first_result.to_a, second_result.to_a)
-      assert_equal(first_result.object_id, second_result.object_id)
+      assert_same(first_result, second_result)
     end
   end
 
@@ -40,7 +40,7 @@ class TestStash < Pgtk::Test
       first_result = stash.exec(query)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
       second_result = stash.exec(query)
-      refute_equal(first_result.object_id, second_result.object_id)
+      refute_same(first_result, second_result)
     end
   end
 
@@ -51,9 +51,9 @@ class TestStash < Pgtk::Test
       first_result = stash.exec(query, ['Elegant Objects'])
       second_result = stash.exec(query, ['Elegant Objects'])
       assert_equal(first_result.to_a, second_result.to_a)
-      assert_equal(first_result.object_id, second_result.object_id)
+      assert_same(first_result, second_result)
       different_param_result = stash.exec(query, ['Different Title'])
-      refute_equal(first_result.object_id, different_param_result.object_id)
+      refute_same(first_result, different_param_result)
     end
   end
 
