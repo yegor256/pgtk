@@ -82,20 +82,20 @@ class Pgtk::Stash
   #
   # Yields a new Stash that shares the same cache but uses the transaction connection.
   #
-  # @yield [Baza::Stash] A stash connected to the transaction
+  # @yield [Pgtk::Stash] A stash connected to the transaction
   # @return [Object] The result of the block
   def transaction
     @pgsql.transaction do |t|
-      yield Baza::Stash.new(t, @stash)
+      yield Pgtk::Stash.new(t, @stash)
     end
   end
 
   # Start a new connection pool with the given arguments.
   #
   # @param args Arguments to pass to the underlying pool's start method
-  # @return [Baza::Stash] A new stash that shares the same cache
-  def start(*)
-    Baza::Stash.new(@pgsql.start(*), @stash)
+  # @return [Pgtk::Stash] A new stash that shares the same cache
+  def start(*args)
+    Pgtk::Stash.new(@pgsql.start(*args), @stash)
   end
 
   # Get the PostgreSQL server version.
