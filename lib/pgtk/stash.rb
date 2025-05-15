@@ -61,7 +61,7 @@ class Pgtk::Stash
       ret = @stash[:queries][pure][key]
       if ret.nil?
         ret = @pgsql.exec(pure, params)
-        if pure.start_with?('SELECT ')
+        if pure.start_with?('SELECT ') && !pure.include?(' NOW() ')
           @entrance.with_write_lock do
             @stash[:queries][pure] ||= {}
             @stash[:queries][pure][key] = ret
