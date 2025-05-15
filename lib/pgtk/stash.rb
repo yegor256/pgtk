@@ -61,7 +61,7 @@ class Pgtk::Stash
       ret = @stash[:queries][pure][key]
       if ret.nil?
         ret = @pgsql.exec(pure, params)
-        unless /(?<=^|\s)(NOW\(\)|COMMIT|ROLLBACK|START TRANSACTION|TRUNCATE|TO WARNING)(?=;|\s|$)/.match?(pure)
+        unless /(?<=^|\s)(NOW\(\)|SET|COMMIT|ROLLBACK|START TRANSACTION|TRUNCATE|VACUUM)(?=;|\s|$)/.match?(pure)
           @entrance.with_write_lock do
             @stash[:queries][pure] ||= {}
             @stash[:queries][pure][key] = ret

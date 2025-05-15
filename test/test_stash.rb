@@ -22,6 +22,21 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_non_trivial_queries
+    fake_pool do |pool|
+      pg = Pgtk::Stash.new(pool)
+      [
+        'VACUUM FULL',
+        'START TRANSACTION',
+        'TRUNCATE book',
+        'SET client_min_messages TO WARNING',
+        "SET TIME ZONE 'America/Los_Angeles'"
+      ].each do |q|
+        pg.exec(q)
+      end
+    end
+  end
+
   def test_caching
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
