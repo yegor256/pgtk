@@ -28,7 +28,11 @@ class TestStash < Pgtk::Test
       [
         'VACUUM FULL',
         'START TRANSACTION',
+        'REINDEX TABLE book',
         'TRUNCATE book',
+        'CREATE TABLE tmp (id INT)',
+        'ALTER TABLE tmp ADD COLUMN foo INT',
+        'DROP TABLE tmp',
         'SET client_min_messages TO WARNING',
         "SET TIME ZONE 'America/Los_Angeles'"
       ].each do |q|
