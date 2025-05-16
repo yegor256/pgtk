@@ -34,5 +34,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'pg', '~>1.1'
   s.add_dependency 'qbash', '>0'
   s.add_dependency 'random-port', '>0'
+  s.add_dependency 'tago', '>0'
   s.metadata['rubygems_mfa_required'] = 'true'
 end

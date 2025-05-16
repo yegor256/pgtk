@@ -25,6 +25,16 @@ class TestImpatient < Pgtk::Test
     end
   end
 
+  def test_interrupts
+    fake_pool do |pool|
+      assert_raises(Pgtk::Impatient::TooSlow) do
+        Pgtk::Impatient.new(pool, 0.1).exec(
+          'SELECT COUNT(*) FROM generate_series(1, 10000000) AS a'
+        )
+      end
+    end
+  end
+
   def test_doesnt_interrupt
     fake_pool do |pool|
       id = Pgtk::Impatient.new(pool).exec(

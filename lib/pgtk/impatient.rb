@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'tago'
 require 'timeout'
 require_relative '../pgtk'
 
@@ -51,6 +52,9 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Impatient
+  # If timed out
+  class TooSlow < StandardError; end
+
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
@@ -74,8 +78,19 @@ class Pgtk::Impatient
   # @return [Array] Result rows
   # @raise [Timeout::Error] If the query takes too long
   def exec(sql, *args)
-    Timeout.timeout(@timeout) do
-      @pool.exec(sql, *args)
+    start = Time.now
+    begin
+      Timeout.timeout(@timeout) do
+        @pool.exec(sql, *args)
+      end
+    rescue Timeout::Error
+      raise TooSlow, [
+        'SQL query',
+        ("with #{args.count} arguments" unless args.empty?),
+        'stopped after',
+        start.ago,
+        'of waiting'
+      ].compact.join(' ')
     end
   end
 

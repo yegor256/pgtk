@@ -10,6 +10,7 @@ PATH
       pg (~> 1.1)
       qbash (> 0)
       random-port (> 0)
+      tago (> 0)
 
 GEM
   remote: https://rubygems.org/
@@ -24,7 +25,7 @@ GEM
     elapsed (0.0.1)
       loog (> 0)
       tago (> 0)
-    joined (0.1.0)
+    joined (0.2.0)
     json (2.12.0)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)

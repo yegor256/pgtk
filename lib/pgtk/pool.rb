@@ -5,6 +5,7 @@
 
 require 'pg'
 require 'loog'
+require 'tago'
 require_relative '../pgtk'
 require_relative 'wire'
 
@@ -203,9 +204,9 @@ class Pgtk::Pool
       end
       lag = Time.now - start
       if lag < 1
-        @log.debug("#{sql}: #{(lag * 1000).round}ms / #{@conn.object_id}")
+        @log.debug("#{sql}: #{start.ago} / #{@conn.object_id}")
       else
-        @log.info("#{sql}: #{format('%.02f', lag)}s")
+        @log.info("#{sql}: #{start.ago}")
       end
       out
     end
