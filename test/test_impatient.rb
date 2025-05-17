@@ -20,7 +20,7 @@ require_relative '../lib/pgtk/impatient'
 class TestImpatient < Pgtk::Test
   def test_takes_version
     fake_pool do |pool|
-      v = Pgtk::Impatient.new(pool).version
+      v = Pgtk::Impatient.new(pool, 1).version
       refute_nil(v)
     end
   end
@@ -28,16 +28,24 @@ class TestImpatient < Pgtk::Test
   def test_interrupts
     fake_pool do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do
-        Pgtk::Impatient.new(pool, 0.1).exec(
-          'SELECT COUNT(*) FROM generate_series(1, 10000000) AS a'
+        Pgtk::Impatient.new(pool, 0.01).exec(
+          'SELECT COUNT(*) FROM generate_series(1, 1000000) AS a'
         )
       end
     end
   end
 
+  def test_skips_by_regex
+    fake_pool do |pool|
+      Pgtk::Impatient.new(pool, 0.01, /^SELECT.*$/).exec(
+        'SELECT COUNT(*) FROM generate_series(1, 1000000) AS a'
+      )
+    end
+  end
+
   def test_doesnt_interrupt
     fake_pool do |pool|
-      id = Pgtk::Impatient.new(pool).exec(
+      id = Pgtk::Impatient.new(pool, 1).exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['1984']
       ).first['id'].to_i
@@ -47,7 +55,7 @@ class TestImpatient < Pgtk::Test
 
   def test_doesnt_interrupt_in_transaction
     fake_pool do |pool|
-      Pgtk::Impatient.new(pool).transaction do |t|
+      Pgtk::Impatient.new(pool, 1).transaction do |t|
         id = t.exec(
           'INSERT INTO book (title) VALUES ($1) RETURNING id',
           ['1984']

@@ -59,9 +59,11 @@ class Pgtk::Impatient
   #
   # @param [Pgtk::Pool] pool The pool to decorate
   # @param [Integer] timeout Timeout in seconds for each SQL query
-  def initialize(pool, timeout = 1)
+  # @param [Array<Regex>] off List of regex to exclude queries from checking
+  def initialize(pool, timeout, *off)
     @pool = pool
     @timeout = timeout
+    @off = off
   end
 
   # Get the version of PostgreSQL server.
@@ -78,6 +80,7 @@ class Pgtk::Impatient
   # @return [Array] Result rows
   # @raise [Timeout::Error] If the query takes too long
   def exec(sql, *args)
+    return @pool.exec(sql, *args) if @off.any? { |re| re.match?(sql) }
     start = Time.now
     begin
       Timeout.timeout(@timeout) do
