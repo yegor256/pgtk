@@ -63,6 +63,7 @@ class TestPool < Pgtk::Test
         pool.exec('INSERT INTO book (title) VALUES ($1)', ['War and War'])
       end
       assert_includes(buf.to_s, 'The title of the book is bad')
+      assert_includes(buf.to_s, 'function intentional_failure() line 3')
     end
   end
 
