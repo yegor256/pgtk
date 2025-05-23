@@ -89,8 +89,8 @@ class Pgtk::Impatient
     rescue Timeout::Error
       raise TooSlow, [
         'SQL query',
-        ("with #{args.count} arguments" unless args.empty?),
-        'stopped after',
+        ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
+        'was terminated after',
         start.ago,
         'of waiting'
       ].compact.join(' ')
