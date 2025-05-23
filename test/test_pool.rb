@@ -38,6 +38,34 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_logs_pgsql_errors_to_logger
+    buf = Loog::Buffer.new
+    fake_pool(log: buf) do |pool|
+      pool.exec(
+        "
+        CREATE FUNCTION intentional_failure() RETURNS trigger AS
+        'BEGIN
+          IF NEW.title = ''War and War'' THEN
+            RAISE EXCEPTION ''The title of the book is bad'';
+          END IF;
+          RETURN NEW;
+        END' LANGUAGE PLPGSQL
+        "
+      )
+      pool.exec(
+        "
+        CREATE TRIGGER check_book_title
+        BEFORE INSERT ON book
+        FOR EACH ROW EXECUTE PROCEDURE intentional_failure();
+        "
+      )
+      assert_raises(PG::RaiseException) do
+        pool.exec('INSERT INTO book (title) VALUES ($1)', ['War and War'])
+      end
+      assert_includes(buf.to_s, 'The title of the book is bad')
+    end
+  end
+
   def test_queries_with_block
     fake_pool do |pool|
       pool.exec('INSERT INTO book (title) VALUES ($1)', ['1984'])
