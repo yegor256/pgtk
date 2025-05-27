@@ -43,6 +43,18 @@ class TestImpatient < Pgtk::Test
     end
   end
 
+  def test_doesnt_shadow_larger_timeout
+    fake_pool do |pool|
+      assert_raises(Timeout::Error) do
+        Timeout.timeout(0.1) do
+          Pgtk::Impatient.new(pool, 999).exec(
+            'SELECT COUNT(*) FROM generate_series(1, 100000000) AS a'
+          )
+        end
+      end
+    end
+  end
+
   def test_doesnt_interrupt
     fake_pool do |pool|
       id = Pgtk::Impatient.new(pool, 1).exec(

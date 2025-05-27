@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'securerandom'
 require 'tago'
 require 'timeout'
 require_relative '../pgtk'
@@ -82,11 +83,13 @@ class Pgtk::Impatient
   def exec(sql, *args)
     return @pool.exec(sql, *args) if @off.any? { |re| re.match?(sql) }
     start = Time.now
+    token = SecureRandom.uuid
     begin
-      Timeout.timeout(@timeout) do
+      Timeout.timeout(@timeout, Timeout::Error, token) do
         @pool.exec(sql, *args)
       end
-    rescue Timeout::Error
+    rescue Timeout::Error => e
+      raise e unless e.message == token
       raise TooSlow, [
         'SQL query',
         ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
