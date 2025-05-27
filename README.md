@@ -44,14 +44,19 @@ Then, add this to your
 ```ruby
 require 'pgtk/pgsql_task'
 Pgtk::PgsqlTask.new :pgsql do |t|
-  t.dir = 'target/pgsql' # Temp directory with PostgreSQL files
-  t.fresh_start = true # To delete the directory on every start
+  # Temp directory with PostgreSQL files:
+  t.dir = 'target/pgsql'
+  # To delete the directory on every start;
+  t.fresh_start = true
   t.user = 'test'
   t.password = 'test'
   t.dbname = 'test'
-  t.yaml = 'target/pgsql-config.yml' # YAML file to be created with connection details
-  t.contexts = '!test' # list of contexts or empty if all
-  t.config = { # list of PostgreSQL configuration options
+  # YAML file to be created with connection details:
+  t.yaml = 'target/pgsql-config.yml'
+  # List of contexts or empty if all:
+  t.contexts = '!test'
+  # List of PostgreSQL configuration options:
+  t.config = {
     log_min_messages: 'ERROR',
     log_filename: 'target/pg.log'
   }
@@ -66,11 +71,16 @@ are used inside):
 ```ruby
 require 'pgtk/liquibase_task'
 Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
-  t.master = 'liquibase/master.xml' # Master XML file path
-  t.yaml = ['target/pgsql-config.yml', 'config.yml'] # YAML files with connection details
-  t.quiet = false # TRUE by default
-  t.postgresql_version = '42.7.0' # overwriting default version
-  t.liquibase_version = '3.2.2' # overwriting default version
+  # Master XML file path:
+  t.master = 'liquibase/master.xml'
+  # YAML files connection details:
+  t.yaml = ['target/pgsql-config.yml', 'config.yml']
+  # Reduce the amount of log messages (TRUE by default):
+  t.quiet = false
+  # Overwriting default version of PostgreSQL server:
+  t.postgresql_version = '42.7.0'
+  # Overwriting default version of Liquibase:
+  t.liquibase_version = '3.2.2'
 end
 ```
 
