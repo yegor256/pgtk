@@ -86,6 +86,7 @@ class Pgtk::Impatient
     token = SecureRandom.uuid
     begin
       Timeout.timeout(@timeout, Timeout::Error, token) do
+        @pool.exec("SET LOCAL statement_timeout = #{(@timeout * 1000).to_i}")
         @pool.exec(sql, *args)
       end
     rescue Timeout::Error => e
