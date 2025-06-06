@@ -26,14 +26,14 @@ Gem::Specification.new do |s|
   s.executables = s.files.grep(%r{^bin/}) { |f| File.basename(f) }
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
-  s.add_dependency 'backtrace', '>0'
-  s.add_dependency 'concurrent-ruby', '>0'
-  s.add_dependency 'joined', '>0'
-  s.add_dependency 'logger', '>0'
-  s.add_dependency 'loog', '>0'
+  s.add_dependency 'backtrace', '~>0.4'
+  s.add_dependency 'concurrent-ruby', '~>1.3'
+  s.add_dependency 'joined', '~>0.3'
+  s.add_dependency 'logger', '~>1.7'
+  s.add_dependency 'loog', '~>0.6'
   s.add_dependency 'pg', '~>1.1'
-  s.add_dependency 'qbash', '>0'
-  s.add_dependency 'random-port', '>0'
-  s.add_dependency 'tago', '>0'
+  s.add_dependency 'qbash', '~>0.4'
+  s.add_dependency 'random-port', '~>0.7'
+  s.add_dependency 'tago', '~>0.1'
   s.metadata['rubygems_mfa_required'] = 'true'
 end

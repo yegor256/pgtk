@@ -11,12 +11,11 @@ gem 'minitest-reporters', '~>1.7', require: false
 gem 'rack', '~>3.1', require: false
 gem 'rake', '~>13.2', require: false
 gem 'rubocop', '~>1.73', require: false
-gem 'rubocop-minitest', '>0', require: false
-gem 'rubocop-performance', '>0', require: false
-gem 'rubocop-rake', '>0', require: false
-gem 'rubocop-rspec', '>0', require: false
+gem 'rubocop-minitest', '~>0.38', require: false
+gem 'rubocop-performance', '~>1.25', require: false
+gem 'rubocop-rake', '~>0.7', require: false
 gem 'simplecov', '~>0.22', require: false
 gem 'simplecov-cobertura', '~>2.1'
-gem 'timeout', '>0'
-gem 'xcop', '>0', require: false
+gem 'timeout', '~>0.4'
+gem 'xcop', '~>0.8', require: false
 gem 'yard', '~>0.9', require: false
