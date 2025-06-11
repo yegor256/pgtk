@@ -10,7 +10,7 @@
   <version>0.0.0</version>
   <packaging>pom</packaging>
   <properties>
-    <postgresql.version>42.7.6</postgresql.version>
+    <postgresql.version>42.7.7</postgresql.version>
     <liquibase.version>4.32.0</liquibase.version>
   </properties>
   <dependencies>
