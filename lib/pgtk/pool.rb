@@ -219,11 +219,19 @@ class Pgtk::Pool
     begin
       yield conn
     rescue StandardError => e
-      conn.close unless conn.finished?
-      conn = @wire.connection
+      conn = renew(conn)
       raise e
     ensure
       @pool << conn
     end
+  end
+
+  def renew(conn)
+    begin
+      conn.close unless conn.finished?
+    rescue StandardError => e
+      @log.warn("Failed to close connection: #{e.message}")
+    end
+    @wire.connection
   end
 end
