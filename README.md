@@ -173,6 +173,42 @@ pool = Pgtk::Spy.new(pool) do |sql|
 end
 ```
 
+## Query Timeouts with `Pgtk::Impatient`
+
+To prevent queries from running indefinitely, use `Pgtk::Impatient` to enforce
+timeouts on database operations:
+
+```ruby
+require 'pgtk/impatient'
+# Wrap the pool with a 5-second timeout for all queries
+impatient = Pgtk::Impatient.new(pool, 5)
+```
+
+The impatient decorator ensures queries don't hang your application:
+
+```ruby
+begin
+  # This query will be terminated if it takes longer than 5 seconds
+  impatient.exec('SELECT * FROM large_table WHERE complex_condition')
+rescue Pgtk::Impatient::TooSlow => e
+  puts "Query timed out: #{e.message}"
+end
+```
+
+You can exclude specific queries from timeout enforcement using regex patterns:
+
+```ruby
+# Don't timeout any SELECT queries or specific maintenance operations
+impatient = Pgtk::Impatient.new(pool, 2, /^SELECT/, /^VACUUM/)
+```
+
+Key features:
+
+1. Configurable timeout in seconds for each query
+2. Raises `Pgtk::Impatient::TooSlow` exception when timeout is exceeded
+3. Can exclude queries matching specific patterns from timeout checks
+4. Also sets PostgreSQL's `statement_timeout` for transactions
+
 ## Query Caching with `Pgtk::Stash`
 
 For applications with frequent read queries,
@@ -204,6 +240,37 @@ for simple queries:
 2. Cache is invalidated by table, not by specific rows
 3. Write operations (`INSERT`, `UPDATE`, `DELETE`) bypass
 the cache and invalidate all cached queries for affected tables
+
+## Automatic Retries with `Pgtk::Retry`
+
+For resilient database operations, `Pgtk::Retry` provides automatic retry
+functionality for failed `SELECT` queries:
+
+```ruby
+require 'pgtk/retry'
+# Wrap the pool with retry functionality (default: 3 attempts)
+retry_pool = Pgtk::Retry.new(pgsql)
+# Or specify custom number of attempts
+retry_pool = Pgtk::Retry.new(pgsql, attempts: 5)
+```
+
+The retry decorator automatically retries `SELECT` queries that fail due to
+transient errors (network issues, connection problems, etc.):
+
+```ruby
+# This SELECT will be retried up to 3 times if it fails
+users = retry_pool.exec('SELECT * FROM users WHERE active = true')
+
+# Non-SELECT queries are NOT retried to prevent duplicate writes
+retry_pool.exec('INSERT INTO logs (message) VALUES ($1)', ['User logged in'])
+```
+
+Key features:
+
+1. Only `SELECT` queries are retried (to prevent duplicate data modifications)
+2. Retries happen immediately without delay
+3. The original error is raised after all retry attempts are exhausted
+4. Works seamlessly with other decorators like `Pgtk::Spy` and `Pgtk::Impatient`
 
 ## Some Examples
 
