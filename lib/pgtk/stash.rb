@@ -41,12 +41,13 @@ class Pgtk::Stash
   #
   # @param [String, Array<String>] query The SQL query to execute
   # @param [Array] params Query parameters
+  # @param [Integer] result Should be 0 for text results, 1 for binary
   # @return [PG::Result] Query result
-  def exec(query, params = [])
+  def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if /(^|\s)(INSERT|DELETE|UPDATE|LOCK)\s/.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
       tables = pure.scan(/(?<=^|\s)(?:UPDATE|INSERT INTO|DELETE FROM|TRUNCATE)\s([a-z]+)(?=[^a-z]|$)/).map(&:first).uniq
-      ret = @pgsql.exec(pure, params)
+      ret = @pgsql.exec(pure, params, result)
       @entrance.with_write_lock do
         tables.each do |t|
           @stash[:tables][t]&.each do |q|
@@ -60,7 +61,7 @@ class Pgtk::Stash
       @entrance.with_write_lock { @stash[:queries][pure] ||= {} }
       ret = @stash[:queries][pure][key]
       if ret.nil?
-        ret = @pgsql.exec(pure, params)
+        ret = @pgsql.exec(pure, params, result)
         if pure.start_with?('SELECT ') && !pure.include?(' NOW() ')
           @entrance.with_write_lock do
             @stash[:queries][pure] ||= {}
