@@ -11,7 +11,7 @@
   <packaging>pom</packaging>
   <properties>
     <postgresql.version>42.7.8</postgresql.version>
-    <liquibase.version>5.0.0</liquibase.version>
+    <liquibase.version>5.0.1</liquibase.version>
   </properties>
   <dependencies>
     <dependency>
