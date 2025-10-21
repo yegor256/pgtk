@@ -22,16 +22,22 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Stash
+  MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
+  MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
+
+  ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s([a-z]+)(?=[^a-z]|$)")
+
+  private_constant :MODS, :ALTS, :MODS_RE, :ALTS_RE
+
   # Initialize a new Stash with query caching.
   #
   # @param [Object] pgsql PostgreSQL connection object
   # @param [Hash] stash Optional existing stash to use (default: new empty stash)
   # @param [Loog] loog Logger for debugging (default: null logger)
-  def initialize(pgsql, stash = {})
+  def initialize(pgsql, stash = { queries: {}, tables: {} })
     @pgsql = pgsql
     @stash = stash
-    @stash[:queries] ||= {}
-    @stash[:tables] ||= {}
     @entrance = Concurrent::ReentrantReadWriteLock.new
   end
 
@@ -44,11 +50,9 @@ class Pgtk::Stash
   # @param [Integer] result Should be 0 for text results, 1 for binary
   # @return [PG::Result] Query result
   def exec(query, params = [], result = 0)
-    mods = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET]
-    alts = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE']
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if Regexp.new("(^|\\s)(#{mods.join('|')})(\\s|$)").match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
-      tables = pure.scan(Regexp.new("(?<=^|\\s)(?:#{alts.join('|')})\\s([a-z]+)(?=[^a-z]|$)")).map(&:first).uniq
+    if MODS_RE.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
+      tables = pure.scan(ALTS_RE).map(&:first).uniq
       ret = @pgsql.exec(pure, params, result)
       @entrance.with_write_lock do
         tables.each do |t|
