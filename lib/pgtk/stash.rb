@@ -35,11 +35,10 @@ class Pgtk::Stash
   # @param [Object] pgsql PostgreSQL connection object
   # @param [Hash] stash Optional existing stash to use (default: new empty stash)
   # @param [Hash] options Optional options for internal tuning
-  # @option [Integer] refresh Interval for re-calculate queries
-  # @option [Integer] top Number of queries to re-calculate
+  # @option [Integer] refresh Interval in seconds for recalculate stale queries
+  # @option [Integer] top Number of queries to recalculate
   # @option [Concurrent::ReentrantReadWriteLock] entrance Lock for write internal state
   # @option [Concurrent::FixedThreadPool] threadpool ThreadPool for execution tasks in background
-  # @option [Concurrent::AtomicBoolean] background Latch for start timers once
   # @option [Loog] loog Logger for debugging (default: null logger)
   def initialize(pgsql, stash = { queries: {}, tables: {} }, **options)
     @pgsql = pgsql
@@ -48,7 +47,6 @@ class Pgtk::Stash
     @top = options[:top] || 100
     @entrance = options[:entrance] || Concurrent::ReentrantReadWriteLock.new
     @threadpool = options[:threadpool] || Concurrent::FixedThreadPool.new(5)
-    @background = options[:background] || Concurrent::AtomicBoolean.new(false)
     @loog = options[:loog] || Loog::NULL
   end
 
@@ -95,7 +93,6 @@ class Pgtk::Stash
       end
       count(pure, key)
     end
-    background
     ret
   end
 
@@ -113,7 +110,6 @@ class Pgtk::Stash
         top: @top,
         entrance: @entrance,
         threadpool: @threadpool,
-        background: @background,
         loog: @loog
       )
     end
@@ -124,13 +120,13 @@ class Pgtk::Stash
   # @param args Arguments to pass to the underlying pool's start method
   # @return [Pgtk::Stash] A new stash that shares the same cache
   def start(*args)
+    start_refresher
     Pgtk::Stash.new(
       @pgsql.start(*args), @stash,
       refresh: @refresh,
       top: @top,
       entrance: @entrance,
       threadpool: @threadpool,
-      background: @background,
       loog: @loog
     )
   end
@@ -158,8 +154,7 @@ class Pgtk::Stash
     end
   end
 
-  def background
-    return unless @background.make_true
+  def start_refresher
     Concurrent::TimerTask.execute(execution_interval: 24 * 60 * 60, executor: @threadpool) do
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
@@ -171,7 +166,8 @@ class Pgtk::Stash
     end
     Concurrent::TimerTask.execute(execution_interval: @refresh, executor: @threadpool) do
       @stash[:queries]
-        .map { |k, v| [k, v.values.sum { |vv| vv['count'] }] }
+        .map { |k, v| [k, v.values.sum { |vv| vv['count'] }, v.values.any? { |vv| vv['stale'] }] }
+        .select { _1[2] }
         .sort_by { -_1[1] }
         .first(@top)
         .each do |a|

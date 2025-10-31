@@ -108,7 +108,7 @@ class TestStash < Pgtk::Test
 
   def test_stats
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool)
+      stash = Pgtk::Stash.new(pool).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       7.times do
         stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
@@ -131,7 +131,7 @@ class TestStash < Pgtk::Test
 
   def test_background_refreshes
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refresh: 0.5)
+      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
