@@ -34,11 +34,34 @@ class Pgtk::Stash
   #
   # @param [Object] pgsql PostgreSQL connection object
   # @param [Hash] stash Optional existing stash to use (default: new empty stash)
+  # @option [Hash] queries Internal cache data (default: {})
+  # @option [Hash] tables Internal cache data (default: {})
+  # @option [Concurrent::ReentrantReadWriteLock] entrance Lock for write internal state
+  # @option [Concurrent::AtomicBoolean] start_refresher Latch for start timers once
+  # @param [Integer] refresh Interval in seconds for recalculate stale queries
+  # @param [Integer] top Number of queries to recalculate
+  # @param [Integer] threads Number of threads in threadpool
   # @param [Loog] loog Logger for debugging (default: null logger)
-  def initialize(pgsql, stash = { queries: {}, tables: {} })
+  def initialize(
+    pgsql,
+    stash = {
+      queries: {},
+      tables: {},
+      entrance: Concurrent::ReentrantReadWriteLock.new,
+      start_refresher: Concurrent::AtomicBoolean.new(false)
+    },
+    refresh: 5,
+    top: 100,
+    threads: 5,
+    loog: Loog::NULL
+  )
     @pgsql = pgsql
     @stash = stash
-    @entrance = Concurrent::ReentrantReadWriteLock.new
+    @entrance = stash[:entrance]
+    @refresh = refresh
+    @top = top
+    @threads = threads
+    @loog = loog
   end
 
   # Execute a SQL query with optional caching.
@@ -57,21 +80,22 @@ class Pgtk::Stash
       @entrance.with_write_lock do
         tables.each do |t|
           @stash[:tables][t]&.each do |q|
-            @stash[:queries].delete(q)
+            @stash[:queries][q].each_key do |key|
+              @stash[:queries][q][key]['stale'] = true
+            end
           end
-          @stash[:tables].delete(t)
         end
       end
     else
       key = params.map(&:to_s).join(' -*&%^- ')
       @entrance.with_write_lock { @stash[:queries][pure] ||= {} }
-      ret = @stash[:queries][pure][key]
-      if ret.nil?
+      ret = @stash.dig(:queries, pure, key, 'ret')
+      if ret.nil? || @stash.dig(:queries, pure, key, 'stale')
         ret = @pgsql.exec(pure, params, result)
         unless pure.include?(' NOW() ')
           @entrance.with_write_lock do
             @stash[:queries][pure] ||= {}
-            @stash[:queries][pure][key] = ret
+            @stash[:queries][pure][key] = { 'ret' => ret, 'params' => params, 'result' => result }
             tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
             tables.each do |t|
               @stash[:tables][t] = [] if @stash[:tables][t].nil?
@@ -81,6 +105,7 @@ class Pgtk::Stash
           end
         end
       end
+      count(pure, key)
     end
     ret
   end
@@ -93,7 +118,13 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pgsql.transaction do |t|
-      yield Pgtk::Stash.new(t, @stash)
+      yield Pgtk::Stash.new(
+        t, @stash,
+        refresh: @refresh,
+        top: @top,
+        threads: @threads,
+        loog: @loog
+      )
     end
   end
 
@@ -102,7 +133,14 @@ class Pgtk::Stash
   # @param args Arguments to pass to the underlying pool's start method
   # @return [Pgtk::Stash] A new stash that shares the same cache
   def start(*args)
-    Pgtk::Stash.new(@pgsql.start(*args), @stash)
+    start_refresher
+    Pgtk::Stash.new(
+      @pgsql.start(*args), @stash,
+      refresh: @refresh,
+      top: @top,
+      threads: @threads,
+      loog: @loog
+    )
   end
 
   # Get the PostgreSQL server version.
@@ -110,5 +148,59 @@ class Pgtk::Stash
   # @return [String] Version string of the database server
   def version
     @pgsql.version
+  end
+
+  # Get statistics on the most used queries
+  #
+  # @return [Array<Array<String, Integer>>] Array of query and hits in desc hits order
+  def stats
+    @stash[:queries].map { |k, v| [k.dup, v.values.sum { |vv| vv['count'] }] }.sort_by { -_1[1] }
+  end
+
+  private
+
+  def count(query, key)
+    @entrance.with_write_lock do
+      @stash[:queries][query][key]['count'] ||= 0
+      @stash[:queries][query][key]['count'] += 1
+    end
+  end
+
+  def start_refresher
+    raise 'Cannot start cache refresh multiple times on same cache data' unless @stash[:start_refresher].make_true
+    Concurrent::FixedThreadPool.new(@threads).then do |threadpool|
+      Concurrent::TimerTask.execute(execution_interval: 24 * 60 * 60, executor: threadpool) do
+        @entrance.with_write_lock do
+          @stash[:queries].each_key do |q|
+            @stash[:queries][q].each_key do |k|
+              @stash[:queries][q][k]['count'] = 0
+            end
+          end
+        end
+      end
+      Concurrent::TimerTask.execute(execution_interval: @refresh, executor: threadpool) do
+        @stash[:queries]
+          .map { |k, v| [k, v.values.sum { |vv| vv['count'] }, v.values.any? { |vv| vv['stale'] }] }
+          .select { _1[2] }
+          .sort_by { -_1[1] }
+          .first(@top)
+          .each do |a|
+          q = a[0]
+          @stash[:queries][q].each_key do |k|
+            next unless @stash[:queries][q][k]['stale']
+            threadpool.post do
+              params = @stash[:queries][q][k]['params']
+              result = @stash[:queries][q][k]['result']
+              ret = @pgsql.exec(q, params, result)
+              @entrance.with_write_lock do
+                @stash[:queries][q] ||= {}
+                @stash[:queries][q][k] = { 'ret' => ret, 'params' => params, 'result' => result, 'count' => 1 }
+              end
+            end
+          end
+        end
+      end
+    end
+    nil
   end
 end
