@@ -129,7 +129,7 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_background_refreshes
+  def test_cache_refreshes
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refresh: 0.5).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
@@ -140,6 +140,17 @@ class TestStash < Pgtk::Test
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       sleep 0.7
       assert_equal(1, stash.stats.first[1])
+    end
+  end
+
+  def test_raise_if_start_cache_refresh_multiple_times
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
+      ex =
+        assert_raises(RuntimeError) do
+          stash.start
+        end
+      assert_equal('Cannot start cache refresh multiple times on same cache data', ex.message)
     end
   end
 end

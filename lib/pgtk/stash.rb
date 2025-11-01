@@ -34,20 +34,34 @@ class Pgtk::Stash
   #
   # @param [Object] pgsql PostgreSQL connection object
   # @param [Hash] stash Optional existing stash to use (default: new empty stash)
-  # @param [Hash] options Optional options for internal tuning
-  # @option [Integer] refresh Interval in seconds for recalculate stale queries
-  # @option [Integer] top Number of queries to recalculate
+  # @option [Hash] queries Internal cache data (default: {})
+  # @option [Hash] tables Internal cache data (default: {})
   # @option [Concurrent::ReentrantReadWriteLock] entrance Lock for write internal state
-  # @option [Concurrent::FixedThreadPool] threadpool ThreadPool for execution tasks in background
-  # @option [Loog] loog Logger for debugging (default: null logger)
-  def initialize(pgsql, stash = { queries: {}, tables: {} }, **options)
+  # @option [Concurrent::AtomicBoolean] start_refresher Latch for start timers once
+  # @param [Integer] refresh Interval in seconds for recalculate stale queries
+  # @param [Integer] top Number of queries to recalculate
+  # @param [Integer] threads Number of threads in threadpool
+  # @param [Loog] loog Logger for debugging (default: null logger)
+  def initialize(
+    pgsql,
+    stash = {
+      queries: {},
+      tables: {},
+      entrance: Concurrent::ReentrantReadWriteLock.new,
+      start_refresher: Concurrent::AtomicBoolean.new(false)
+    },
+    refresh: 5,
+    top: 100,
+    threads: 5,
+    loog: Loog::NULL
+  )
     @pgsql = pgsql
     @stash = stash
-    @refresh = options[:refresh] || 5
-    @top = options[:top] || 100
-    @entrance = options[:entrance] || Concurrent::ReentrantReadWriteLock.new
-    @threadpool = options[:threadpool] || Concurrent::FixedThreadPool.new(5)
-    @loog = options[:loog] || Loog::NULL
+    @entrance = stash[:entrance]
+    @refresh = refresh
+    @top = top
+    @threads = threads
+    @loog = loog
   end
 
   # Execute a SQL query with optional caching.
@@ -108,8 +122,7 @@ class Pgtk::Stash
         t, @stash,
         refresh: @refresh,
         top: @top,
-        entrance: @entrance,
-        threadpool: @threadpool,
+        threads: @threads,
         loog: @loog
       )
     end
@@ -125,8 +138,7 @@ class Pgtk::Stash
       @pgsql.start(*args), @stash,
       refresh: @refresh,
       top: @top,
-      entrance: @entrance,
-      threadpool: @threadpool,
+      threads: @threads,
       loog: @loog
     )
   end
@@ -155,32 +167,35 @@ class Pgtk::Stash
   end
 
   def start_refresher
-    Concurrent::TimerTask.execute(execution_interval: 24 * 60 * 60, executor: @threadpool) do
-      @entrance.with_write_lock do
-        @stash[:queries].each_key do |q|
-          @stash[:queries][q].each_key do |k|
-            @stash[:queries][q][k]['count'] = 0
+    raise 'Cannot start cache refresh multiple times on same cache data' unless @stash[:start_refresher].make_true
+    Concurrent::FixedThreadPool.new(@threads).then do |threadpool|
+      Concurrent::TimerTask.execute(execution_interval: 24 * 60 * 60, executor: threadpool) do
+        @entrance.with_write_lock do
+          @stash[:queries].each_key do |q|
+            @stash[:queries][q].each_key do |k|
+              @stash[:queries][q][k]['count'] = 0
+            end
           end
         end
       end
-    end
-    Concurrent::TimerTask.execute(execution_interval: @refresh, executor: @threadpool) do
-      @stash[:queries]
-        .map { |k, v| [k, v.values.sum { |vv| vv['count'] }, v.values.any? { |vv| vv['stale'] }] }
-        .select { _1[2] }
-        .sort_by { -_1[1] }
-        .first(@top)
-        .each do |a|
-        q = a[0]
-        @stash[:queries][q].each_key do |k|
-          next unless @stash[:queries][q][k]['stale']
-          @threadpool.post do
-            params = @stash[:queries][q][k]['params']
-            result = @stash[:queries][q][k]['result']
-            ret = @pgsql.exec(q, params, result)
-            @entrance.with_write_lock do
-              @stash[:queries][q] ||= {}
-              @stash[:queries][q][k] = { 'ret' => ret, 'params' => params, 'result' => result, 'count' => 1 }
+      Concurrent::TimerTask.execute(execution_interval: @refresh, executor: threadpool) do
+        @stash[:queries]
+          .map { |k, v| [k, v.values.sum { |vv| vv['count'] }, v.values.any? { |vv| vv['stale'] }] }
+          .select { _1[2] }
+          .sort_by { -_1[1] }
+          .first(@top)
+          .each do |a|
+          q = a[0]
+          @stash[:queries][q].each_key do |k|
+            next unless @stash[:queries][q][k]['stale']
+            threadpool.post do
+              params = @stash[:queries][q][k]['params']
+              result = @stash[:queries][q][k]['result']
+              ret = @pgsql.exec(q, params, result)
+              @entrance.with_write_lock do
+                @stash[:queries][q] ||= {}
+                @stash[:queries][q][k] = { 'ret' => ret, 'params' => params, 'result' => result, 'count' => 1 }
+              end
             end
           end
         end
