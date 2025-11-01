@@ -153,4 +153,16 @@ class TestStash < Pgtk::Test
       assert_equal('Cannot start cache refresh multiple times on same cache data', ex.message)
     end
   end
+
+  def test_not_count_queries_that_uncached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT id, title, NOW() FROM book WHERE id = $1', [1])
+      stash.stats.first.then do |s|
+        assert_equal('SELECT id, title, NOW() FROM book WHERE id = $1', s[0])
+        assert_equal(0, s[1])
+      end
+    end
+  end
 end

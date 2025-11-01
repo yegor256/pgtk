@@ -160,6 +160,7 @@ class Pgtk::Stash
   private
 
   def count(query, key)
+    return if @stash.dig(:queries, query, key).nil?
     @entrance.with_write_lock do
       @stash[:queries][query][key]['count'] ||= 0
       @stash[:queries][query][key]['count'] += 1
