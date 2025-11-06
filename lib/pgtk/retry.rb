@@ -57,6 +57,11 @@ class Pgtk::Retry
     @attempts = attempts
   end
 
+  # Start a new connection pool with the given arguments.
+  def start!(*)
+    @pool.start!(*)
+  end
+
   # Get the version of PostgreSQL server.
   #
   # @return [String] Version of PostgreSQL server

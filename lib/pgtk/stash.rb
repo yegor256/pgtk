@@ -66,6 +66,12 @@ class Pgtk::Stash
     @loog = loog
   end
 
+  # Start a new connection pool with the given arguments.
+  def start!(*)
+    launch!
+    @pool.start!(*)
+  end
+
   # Get the PostgreSQL server version.
   # @return [String] Version string of the database server
   def version
@@ -160,12 +166,6 @@ class Pgtk::Stash
         loog: @loog
       )
     end
-  end
-
-  # Start a new connection pool with the given arguments.
-  def start!(*)
-    launch!
-    @pool.start!(*)
   end
 
   private

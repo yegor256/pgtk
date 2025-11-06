@@ -34,8 +34,9 @@ class TestRetry < Pgtk::Test
 
   def test_executes_select_without_error
     fake_pool do |pool|
-      retry_pool = Pgtk::Retry.new(pool, attempts: 3)
-      result = retry_pool.exec('SELECT 1 as value')
+      r = Pgtk::Retry.new(pool, attempts: 3)
+      r.start!(1)
+      result = r.exec('SELECT 1 as value')
       assert_equal('1', result.first['value'])
     end
   end
