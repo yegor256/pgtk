@@ -134,10 +134,10 @@ class Pgtk::Stash
           end
         end
       end
-      if @stash.dig(:queries, query, key)
+      if @stash.dig(:queries, pure, key)
         @entrance.with_write_lock do
-          @stash[:queries][query][key][:popularity] ||= 0
-          @stash[:queries][query][key][:popularity] += 1
+          @stash[:queries][pure][key][:popularity] ||= 0
+          @stash[:queries][pure][key][:popularity] += 1
         end
       end
     end

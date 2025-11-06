@@ -187,4 +187,14 @@ class TestStash < Pgtk::Test
       refute_includes(stash.dump, 'SELECT id, title, NOW()')
     end
   end
+
+  def test_dumps_with_spaces_in_query
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool).start
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Test'])
+      stash.exec('SELECT  title  FROM    book  WHERE id = $1', [1])
+      result = stash.dump
+      assert_includes(result, 'queries in cache')
+    end
+  end
 end
