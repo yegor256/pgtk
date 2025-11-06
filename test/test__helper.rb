@@ -69,7 +69,7 @@ class Pgtk::Test < Minitest::Test
         Pgtk::Wire::Yaml.new(f),
         log: log
       )
-      pool.start(size)
+      pool.start!(size)
       yield pool
     end
   end

@@ -16,7 +16,8 @@ require_relative '../pgtk'
 # Basic usage:
 #
 #   # Create and configure a regular pool
-#   pool = Pgtk::Pool.new(wire).start(4)
+#   pool = Pgtk::Pool.new(wire)
+#   pool.start!(4)
 #
 #   # Wrap the pool in a retry decorator with 3 attempts
 #   retry_pool = Pgtk::Retry.new(pool, attempts: 3)

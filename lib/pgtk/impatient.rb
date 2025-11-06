@@ -19,7 +19,8 @@ require_relative '../pgtk'
 # Basic usage:
 #
 #   # Create and configure a regular pool
-#   pool = Pgtk::Pool.new(wire).start(4)
+#   pool = Pgtk::Pool.new(wire)
+#   pool.start!(4)
 #
 #   # Wrap the pool in an impatient decorator with a 2-second timeout
 #   impatient = Pgtk::Impatient.new(pool, 2)
@@ -65,6 +66,11 @@ class Pgtk::Impatient
     @pool = pool
     @timeout = timeout
     @off = off
+  end
+
+  # Start a new connection pool with the given arguments.
+  def start!(*)
+    @pool.start!
   end
 
   # Get the version of PostgreSQL server.

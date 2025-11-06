@@ -99,16 +99,16 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Start Test'])
-      new_stash = stash.start(1)
-      assert_instance_of(Pgtk::Stash, new_stash)
-      result = new_stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
+      stash.start!(1)
+      result = stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
       assert_equal('Start Test', result[0]['title'])
     end
   end
 
   def test_dump_empty_inner_state
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
       stash.dump.then do |d|
         assert_includes(d, 'launched')
         assert_includes(d, '0 queries in cache')
@@ -130,7 +130,8 @@ class TestStash < Pgtk::Test
 
   def test_dump_inner_state
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       7.times do
         stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
@@ -157,7 +158,8 @@ class TestStash < Pgtk::Test
   def test_cache_refills
     refill_interval = 0.2
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refill_interval:).start
+      stash = Pgtk::Stash.new(pool, refill_interval:)
+      stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
@@ -172,16 +174,18 @@ class TestStash < Pgtk::Test
 
   def test_raise_if_start_cache_refresh_multiple_times
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
       assert_raises(RuntimeError) do
-        stash.start
+        stash.start!
       end
     end
   end
 
   def test_not_count_queries_that_uncached
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title, NOW() FROM book WHERE id = $1', [1])
       refute_includes(stash.dump, 'SELECT id, title, NOW()')
@@ -190,7 +194,8 @@ class TestStash < Pgtk::Test
 
   def test_dumps_with_spaces_in_query
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Test'])
       stash.exec('SELECT  title  FROM    book  WHERE id = $1', [1])
       result = stash.dump

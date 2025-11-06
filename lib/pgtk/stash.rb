@@ -163,16 +163,9 @@ class Pgtk::Stash
   end
 
   # Start a new connection pool with the given arguments.
-  # @return [Pgtk::Stash] A new stash that shares the same cache
-  def start(*)
+  def start!(*)
     launch!
-    Pgtk::Stash.new(
-      @pool.start(*), @stash,
-      refill_interval: @refill_interval,
-      top: @top,
-      threads: @threads,
-      loog: @loog
-    )
+    @pool.start!(*)
   end
 
   private

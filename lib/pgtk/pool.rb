@@ -29,7 +29,8 @@ require_relative 'wire'
 #   )
 #
 #   # Create and start a connection pool with 4 connections
-#   pool = Pgtk::Pool.new(wire).start(4)
+#   pool = Pgtk::Pool.new(wire)
+#   pool.start!(4)
 #
 #   # Execute a simple query
 #   pool.exec('SELECT * FROM users')
@@ -85,12 +86,11 @@ class Pgtk::Pool
   # allows only one connection open.
   #
   # @param [Integer] max Total amount of PostgreSQL connections in the pool
-  def start(max = 8)
+  def start!(max = 8)
     max.times do
       @pool << @wire.connection
     end
     @log.debug("PostgreSQL pool started with #{max} connections")
-    self
   end
 
   # Make a query and return the result as an array of hashes. For example,

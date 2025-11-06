@@ -116,7 +116,7 @@ From inside your app you may find this class useful:
 ```ruby
 require 'pgtk/pool'
 pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'))
-pgsql.start(5) # Start it with five simultaneous connections
+pgsql.start!(5) # Start it with five simultaneous connections
 ```
 
 You can also let it pick the connection parameters from the environment
@@ -155,7 +155,8 @@ module Minitest
     def test_pgsql
       @@test_pgsql ||= Pgtk::Pool.new(
         Pgtk::Wire::Yaml.new('target/pgsql-config.yml')
-      ).start
+      )
+      @@test_pgsql.start!
     end
   end
 end

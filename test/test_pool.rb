@@ -201,7 +201,7 @@ class TestPool < Pgtk::Test
         Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
         log: Loog::NULL
       )
-      pool.start(1)
+      pool.start!(1)
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
       cycle = 0
