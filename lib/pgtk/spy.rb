@@ -62,14 +62,22 @@ class Pgtk::Spy
     @pool.version
   end
 
+  # Convert internal state into text.
+  def dump
+    [
+      @pool.dump,
+      '',
+      'Pgtk::Spy'
+    ].join("\n")
+  end
+
   # Execute a SQL query and track its execution.
   #
   # @param [String] sql The SQL query with params inside (possibly)
-  # @param [Array] args List of arguments
   # @return [Array] Result rows
-  def exec(sql, *args)
+  def exec(sql, *)
     start = Time.now
-    ret = @pool.exec(sql, *args)
+    ret = @pool.exec(sql, *)
     @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - start)
     ret
   end

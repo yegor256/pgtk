@@ -72,7 +72,7 @@ class Pgtk::Wire::Env
     Pgtk::Wire::Direct.new(
       host: uri.host,
       port: uri.port,
-      dbname: uri.path[1..-1],
+      dbname: uri.path[1..],
       user: uri.userinfo.split(':')[0],
       password: uri.userinfo.split(':')[1]
     ).connection

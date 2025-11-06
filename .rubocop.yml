@@ -7,7 +7,7 @@ AllCops:
     - 'assets/**/**'
     - 'vendor/**/**'
   DisplayCopNames: true
-  TargetRubyVersion: 2.3
+  TargetRubyVersion: 3.2
   SuggestExtensions: false
   NewCops: enable
 plugins:
@@ -29,11 +29,10 @@ Metrics/AbcSize:
 Metrics/CyclomaticComplexity:
   Max: 20
 Metrics/ClassLength:
-  Max: 200
+  Max: 300
 Metrics/MethodLength:
   Max: 100
 Metrics/PerceivedComplexity:
   Max: 20
 Metrics/ParameterLists:
   Max: 6
-require: []

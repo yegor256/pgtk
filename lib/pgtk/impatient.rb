@@ -74,6 +74,16 @@ class Pgtk::Impatient
     @pool.version
   end
 
+  # Convert internal state into text.
+  def dump
+    [
+      @pool.dump,
+      '',
+      "Pgtk::Impatient (timeout=#{@timeout}s):",
+      @off.map { |re| "  #{re}" }
+    ].join("\n")
+  end
+
   # Execute a SQL query with a timeout.
   #
   # @param [String] sql The SQL query with params inside (possibly)

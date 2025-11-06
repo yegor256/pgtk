@@ -63,24 +63,32 @@ class Pgtk::Retry
     @pool.version
   end
 
+  # Convert internal state into text.
+  def dump
+    [
+      @pool.dump,
+      '',
+      "Pgtk::Retry (attempts=#{@attempts})"
+    ].join("\n")
+  end
+
   # Execute a SQL query with automatic retry for SELECT queries.
   #
   # @param [String] sql The SQL query with params inside (possibly)
-  # @param [Array] args List of arguments
   # @return [Array] Result rows
-  def exec(sql, *args)
+  def exec(sql, *)
     query = sql.is_a?(Array) ? sql.join(' ') : sql
     if query.strip.upcase.start_with?('SELECT')
       attempt = 0
       begin
-        @pool.exec(sql, *args)
+        @pool.exec(sql, *)
       rescue StandardError => e
         attempt += 1
         raise e if attempt >= @attempts
         retry
       end
     else
-      @pool.exec(sql, *args)
+      @pool.exec(sql, *)
     end
   end
 
@@ -88,7 +96,7 @@ class Pgtk::Retry
   #
   # @yield [Object] Yields the transaction object
   # @return [Object] Result of the block
-  def transaction(&block)
-    @pool.transaction(&block)
+  def transaction(&)
+    @pool.transaction(&)
   end
 end

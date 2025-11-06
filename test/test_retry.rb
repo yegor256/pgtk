@@ -25,6 +25,13 @@ class TestRetry < Pgtk::Test
     end
   end
 
+  def test_dumps_inner_state
+    fake_pool do |pool|
+      t = Pgtk::Retry.new(pool).dump
+      refute_nil(t)
+    end
+  end
+
   def test_executes_select_without_error
     fake_pool do |pool|
       retry_pool = Pgtk::Retry.new(pool, attempts: 3)

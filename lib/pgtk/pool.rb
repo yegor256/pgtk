@@ -54,7 +54,7 @@ class Pgtk::Pool
   def initialize(wire, log: Loog::NULL)
     @wire = wire
     @log = log
-    @pool = Queue.new
+    @pool = IterableQueue.new
   end
 
   # Get the version of PostgreSQL server.
@@ -62,6 +62,19 @@ class Pgtk::Pool
   # @return [String] Version of PostgreSQL server
   def version
     @version ||= exec('SHOW server_version')[0]['server_version'].split[0]
+  end
+
+  # Get as much details about it as possible.
+  #
+  # @return [String] Summary of inner state
+  def dump
+    [
+      "PgSQL version: #{version}",
+      "#{@pool.size} connections:",
+      @pool.map do |c|
+        "  #{c.inspect}"
+      end
+    ].flatten.join("\n")
   end
 
   # Start it with a fixed number of connections. The amount of connections
@@ -160,6 +173,46 @@ class Pgtk::Pool
       rescue StandardError => e
         t.exec('ROLLBACK')
         raise e
+      end
+    end
+  end
+
+  # Thread-safe queue implementation that supports iteration.
+  # Unlike Ruby's Queue class, this implementation allows safe iteration
+  # over all elements while maintaining thread safety for concurrent access.
+  #
+  # This class is used internally by Pool to store database connections
+  # and provide the ability to iterate over them for inspection purposes.
+  class IterableQueue
+    def initialize
+      @items = []
+      @mutex = Mutex.new
+      @condition = ConditionVariable.new
+    end
+
+    def <<(item)
+      @mutex.synchronize do
+        @items << item
+        @condition.signal
+      end
+    end
+
+    def pop
+      @mutex.synchronize do
+        @condition.wait(@mutex) while @items.empty?
+        @items.shift
+      end
+    end
+
+    def size
+      @mutex.synchronize do
+        @items.size
+      end
+    end
+
+    def map(&)
+      @mutex.synchronize do
+        @items.map(&)
       end
     end
   end

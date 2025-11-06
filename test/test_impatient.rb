@@ -25,6 +25,13 @@ class TestImpatient < Pgtk::Test
     end
   end
 
+  def test_dumps_inner_state
+    fake_pool do |pool|
+      t = Pgtk::Impatient.new(pool, 1).dump
+      refute_nil(t)
+    end
+  end
+
   def test_interrupts
     fake_pool do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do

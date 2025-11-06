@@ -28,6 +28,21 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_dumps_itself
+    fake_pool do |pool|
+      t = pool.dump
+      assert_includes(t, pool.version)
+    end
+  end
+
+  def test_dumps_connections
+    fake_pool(4) do |pool|
+      t = pool.dump
+      assert_includes(t, '4 connections')
+      assert_includes(t, 'PG::Connection')
+    end
+  end
+
   def test_basic
     fake_pool do |pool|
       id = pool.exec(
@@ -191,18 +206,16 @@ class TestPool < Pgtk::Test
       qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
       cycle = 0
       loop do
-        begin
-          TCPSocket.new('localhost', port)
-          sleep(0.1)
-          cycle += 1
-          if cycle > 50
-            qbash('ps -ax | grep postgres')
-            raise "Can't stop running postgres at port #{port}, for some reason"
-          end
-        rescue StandardError => e
-          puts e.message
-          break
+        TCPSocket.new('localhost', port)
+        sleep(0.1)
+        cycle += 1
+        if cycle > 50
+          qbash('ps -ax | grep postgres')
+          raise "Can't stop running postgres at port #{port}, for some reason"
         end
+      rescue StandardError => e
+        puts e.message
+        break
       end
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
@@ -210,14 +223,12 @@ class TestPool < Pgtk::Test
       task.reenable
       task.invoke
       loop do
-        begin
-          pool.exec('SELECT * FROM pg_catalog.pg_tables')
-          break
-        rescue StandardError => e
-          puts e.message
-          sleep(0.1)
-          retry
-        end
+        pool.exec('SELECT * FROM pg_catalog.pg_tables')
+        break
+      rescue StandardError => e
+        puts e.message
+        sleep(0.1)
+        retry
       end
     end
   end

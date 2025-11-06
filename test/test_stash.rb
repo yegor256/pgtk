@@ -106,6 +106,13 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_dump_inner_state
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool).start
+      assert_includes(stash.dump, 'launched')
+    end
+  end
+
   def test_stats
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool).start
