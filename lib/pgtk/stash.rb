@@ -87,7 +87,7 @@ class Pgtk::Stash
       @pool.dump,
       '',
       "Pgtk::Stash (refill_interval=#{@refill_interval}s, top=#{@top}q, threads=#{@threads}t):",
-      "  #{'not ' unless @stash[:launched]}launched",
+      "  #{'not ' if @stash[:launched].false?}launched",
       "  #{@stash[:tables].count} tables in cache",
       "  #{@stash[:queries].count} queries in cache:",
       qq.sort_by { -_1[2] }.take(20).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
