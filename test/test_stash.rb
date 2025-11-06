@@ -109,13 +109,6 @@ class TestStash < Pgtk::Test
   def test_dump_inner_state
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool).start
-      assert_includes(stash.dump, 'launched')
-    end
-  end
-
-  def test_stats
-    fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       7.times do
         stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
@@ -129,47 +122,47 @@ class TestStash < Pgtk::Test
       3.times do
         stash.exec('SELECT title FROM book WHERE id = $1', [2])
       end
-      stash.stats.then do |stats|
-        assert_equal(15, stats.first[1])
-        assert_equal(8, stats.last[1])
+      stash.dump.then do |d|
+        assert_includes(d, 'launched')
+        assert_includes(d, '2 queries in cache')
+        assert_includes(d, '1 tables in cache')
+        assert_includes(d, '2/15p/0s: SELECT id, title')
+        assert_includes(d, '2/8p/0s: SELECT title')
       end
     end
   end
 
-  def test_cache_refreshes
+  def test_cache_refills
+    refill_interval = 0.2
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
+      stash = Pgtk::Stash.new(pool, refill_interval:).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
-      assert_equal(3, stash.stats.first[1])
+      assert_includes(stash.dump, '1/3p/0s: SELECT id')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
-      sleep 0.7
-      assert_equal(1, stash.stats.first[1])
+      assert_includes(stash.dump, '1/3p/1s: SELECT id')
+      sleep refill_interval * 2
+      assert_includes(stash.dump, '1/3p/0s: SELECT id')
     end
   end
 
   def test_raise_if_start_cache_refresh_multiple_times
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
-      ex =
-        assert_raises(RuntimeError) do
-          stash.start
-        end
-      assert_equal('Cannot start cache refresh multiple times on same cache data', ex.message)
+      stash = Pgtk::Stash.new(pool).start
+      assert_raises(RuntimeError) do
+        stash.start
+      end
     end
   end
 
   def test_not_count_queries_that_uncached
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refresh: 0.5).start
+      stash = Pgtk::Stash.new(pool).start
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title, NOW() FROM book WHERE id = $1', [1])
-      stash.stats.first.then do |s|
-        assert_equal('SELECT id, title, NOW() FROM book WHERE id = $1', s[0])
-        assert_equal(0, s[1])
-      end
+      refute_includes(stash.dump, 'SELECT id, title, NOW()')
     end
   end
 end

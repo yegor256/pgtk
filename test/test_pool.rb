@@ -39,7 +39,7 @@ class TestPool < Pgtk::Test
     fake_pool(4) do |pool|
       t = pool.dump
       assert_includes(t, '4 connections')
-      assert_includes(t, 'PG::Connection')
+      assert_includes(t, pool.version)
     end
   end
 

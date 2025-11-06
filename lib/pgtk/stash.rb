@@ -28,7 +28,9 @@ class Pgtk::Stash
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s([a-z]+)(?=[^a-z]|$)")
 
-  private_constant :MODS, :ALTS, :MODS_RE, :ALTS_RE
+  SEPARATOR = ' --%*@#~($-- '
+
+  private_constant :MODS, :ALTS, :MODS_RE, :ALTS_RE, :SEPARATOR
 
   # Initialize a new Stash with query caching.
   #
@@ -38,7 +40,7 @@ class Pgtk::Stash
   # @option [Hash] tables Internal cache data (default: {})
   # @option [Concurrent::ReentrantReadWriteLock] entrance Lock for write internal state
   # @option [Concurrent::AtomicBoolean] launched Latch for start timers once
-  # @param [Integer] refresh Interval in seconds for recalculate stale queries
+  # @param [Integer] refill_interval Interval in seconds for recalculate stale queries
   # @param [Integer] top Number of queries to recalculate
   # @param [Integer] threads Number of threads in threadpool
   # @param [Loog] loog Logger for debugging (default: null logger)
@@ -50,7 +52,7 @@ class Pgtk::Stash
       entrance: Concurrent::ReentrantReadWriteLock.new,
       launched: Concurrent::AtomicBoolean.new(false)
     },
-    refresh: 5,
+    refill_interval: 5,
     top: 100,
     threads: 5,
     loog: Loog::NULL
@@ -58,7 +60,7 @@ class Pgtk::Stash
     @pool = pool
     @stash = stash
     @entrance = stash[:entrance]
-    @refresh = refresh
+    @refill_interval = refill_interval
     @top = top
     @threads = threads
     @loog = loog
@@ -72,13 +74,23 @@ class Pgtk::Stash
 
   # Convert internal state into text.
   def dump
+    qq =
+      @stash[:queries].map do |k, v|
+        [
+          k.dup, # the query
+          v.values.count, # how many keys?
+          v.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
+          v.values.count { |vv| vv[:stale] } # how many stale keys?
+        ]
+      end
     [
       @pool.dump,
       '',
-      "Pgtk::Stash (refresh=#{@refresh}s, top=#{@top}q, threads=#{@threads}t):",
+      "Pgtk::Stash (refill_interval=#{@refill_interval}s, top=#{@top}q, threads=#{@threads}t):",
       "  #{'not ' unless @stash[:launched]}launched",
-      "  #{@stash[:queries].count} queries in cache",
-      "  #{@stash[:tables].count} tables in cache"
+      "  #{@stash[:tables].count} tables in cache",
+      "  #{@stash[:queries].count} queries in cache:",
+      qq.sort_by { -_1[2] }.take(20).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
     ].join("\n")
   end
 
@@ -99,21 +111,20 @@ class Pgtk::Stash
         tables.each do |t|
           @stash[:tables][t]&.each do |q|
             @stash[:queries][q].each_key do |key|
-              @stash[:queries][q][key]['stale'] = true
+              @stash[:queries][q][key][:stale] = true
             end
           end
         end
       end
     else
-      key = params.map(&:to_s).join(' -*&%^- ')
-      @entrance.with_write_lock { @stash[:queries][pure] ||= {} }
-      ret = @stash.dig(:queries, pure, key, 'ret')
-      if ret.nil? || @stash.dig(:queries, pure, key, 'stale')
+      key = params.map(&:to_s).join(SEPARATOR)
+      ret = @stash.dig(:queries, pure, key, :ret)
+      if ret.nil? || @stash.dig(:queries, pure, key, :stale)
         ret = @pool.exec(pure, params, result)
         unless pure.include?(' NOW() ')
           @entrance.with_write_lock do
             @stash[:queries][pure] ||= {}
-            @stash[:queries][pure][key] = { 'ret' => ret, 'params' => params, 'result' => result }
+            @stash[:queries][pure][key] = { ret:, params:, result: }
             tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
             tables.each do |t|
               @stash[:tables][t] = [] if @stash[:tables][t].nil?
@@ -123,7 +134,12 @@ class Pgtk::Stash
           end
         end
       end
-      count(pure, key)
+      if @stash.dig(:queries, query, key)
+        @entrance.with_write_lock do
+          @stash[:queries][query][key][:popularity] ||= 0
+          @stash[:queries][query][key][:popularity] += 1
+        end
+      end
     end
     ret
   end
@@ -138,7 +154,7 @@ class Pgtk::Stash
     @pool.transaction do |t|
       yield Pgtk::Stash.new(
         t, @stash,
-        refresh: @refresh,
+        refill_interval: @refill_interval,
         top: @top,
         threads: @threads,
         loog: @loog
@@ -152,59 +168,42 @@ class Pgtk::Stash
     launch!
     Pgtk::Stash.new(
       @pool.start(*), @stash,
-      refresh: @refresh,
+      refill_interval: @refill_interval,
       top: @top,
       threads: @threads,
       loog: @loog
     )
   end
 
-  # Get statistics on the most used queries
-  #
-  # @return [Array<Array<String, Integer>>] Array of query and hits in desc hits order
-  def stats
-    @stash[:queries].map { |k, v| [k.dup, v.values.sum { |vv| vv['count'] }] }.sort_by { -_1[1] }
-  end
-
   private
 
-  def count(query, key)
-    return if @stash.dig(:queries, query, key).nil?
-    @entrance.with_write_lock do
-      @stash[:queries][query][key]['count'] ||= 0
-      @stash[:queries][query][key]['count'] += 1
-    end
-  end
-
   def launch!
-    raise 'Cannot start cache refresh multiple times on same cache data' unless @stash[:launched].make_true
+    raise 'Cannot launch multiple times on same cache data' unless @stash[:launched].make_true
     Concurrent::FixedThreadPool.new(@threads).then do |threadpool|
-      Concurrent::TimerTask.execute(execution_interval: 24 * 60 * 60, executor: threadpool) do
+      Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: threadpool) do
         @entrance.with_write_lock do
           @stash[:queries].each_key do |q|
             @stash[:queries][q].each_key do |k|
-              @stash[:queries][q][k]['count'] = 0
+              @stash[:queries][q][k][:popularity] = 0
             end
           end
         end
       end
-      Concurrent::TimerTask.execute(execution_interval: @refresh, executor: threadpool) do
+      Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: threadpool) do
         @stash[:queries]
-          .map { |k, v| [k, v.values.sum { |vv| vv['count'] }, v.values.any? { |vv| vv['stale'] }] }
+          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
           .select { _1[2] }
           .sort_by { -_1[1] }
           .first(@top)
           .each do |a|
           q = a[0]
           @stash[:queries][q].each_key do |k|
-            next unless @stash[:queries][q][k]['stale']
+            next unless @stash[:queries][q][k][:stale]
             threadpool.post do
-              params = @stash[:queries][q][k]['params']
-              result = @stash[:queries][q][k]['result']
-              ret = @pool.exec(q, params, result)
               @entrance.with_write_lock do
-                @stash[:queries][q] ||= {}
-                @stash[:queries][q][k] = { 'ret' => ret, 'params' => params, 'result' => result, 'count' => 1 }
+                h = @stash[:queries][q][k]
+                h[:stale] = false
+                h[:ret] = @pool.exec(q, h[:params], h[:result])
               end
             end
           end
