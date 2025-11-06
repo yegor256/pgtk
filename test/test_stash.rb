@@ -106,6 +106,17 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_dump_empty_inner_state
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool).start
+      stash.dump.then do |d|
+        assert_includes(d, 'launched')
+        assert_includes(d, '0 queries in cache')
+        assert_includes(d, '0 tables in cache')
+      end
+    end
+  end
+
   def test_dump_inner_state
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool).start
