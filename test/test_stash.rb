@@ -145,7 +145,7 @@ class TestStash < Pgtk::Test
         stash.exec('SELECT title FROM book WHERE id = $1', [2])
       end
       stash.dump.then do |d|
-        assert_includes(d, 'launched')
+        assert_includes(d, '  launched')
         assert_includes(d, '2 queries in cache')
         assert_includes(d, '1 tables in cache')
         assert_includes(d, '2/15p/0s: SELECT id, title')
