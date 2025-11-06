@@ -123,14 +123,14 @@ class Pgtk::Stash
         ret = @pool.exec(pure, params, result)
         unless pure.include?(' NOW() ')
           @entrance.with_write_lock do
+            tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
+            raise "No tables at #{pure.inspect}" if tables.empty?
             @stash[:queries][pure] ||= {}
             @stash[:queries][pure][key] = { ret:, params:, result: }
-            tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
             tables.each do |t|
               @stash[:tables][t] = [] if @stash[:tables][t].nil?
               @stash[:tables][t].append(pure).uniq!
             end
-            raise "No tables at #{pure.inspect}" if tables.empty?
           end
         end
       end
