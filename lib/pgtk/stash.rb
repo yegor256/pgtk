@@ -125,12 +125,12 @@ class Pgtk::Stash
           @entrance.with_write_lock do
             tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
             raise "No tables at #{pure.inspect}" if tables.empty?
-            @stash[:queries][pure] ||= {}
-            @stash[:queries][pure][key] = { ret:, params:, result: }
             tables.each do |t|
               @stash[:tables][t] = [] if @stash[:tables][t].nil?
               @stash[:tables][t].append(pure).uniq!
             end
+            @stash[:queries][pure] ||= {}
+            @stash[:queries][pure][key] = { ret:, params:, result: }
           end
         end
       end
