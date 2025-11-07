@@ -44,7 +44,13 @@ class TestSpy < Pgtk::Test
   def test_start
     fake_pool do |pool|
       stash = Pgtk::Spy.new(pool)
-      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Start Test'])
+      stash.exec(
+        [
+          'INSERT INTO book (title)',
+          'VALUES ($1)'
+        ],
+        ['Start Test']
+      )
       stash.start!(1)
       result = stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
       assert_equal('Start Test', result[0]['title'])
