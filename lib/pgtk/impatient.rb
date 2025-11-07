@@ -92,11 +92,12 @@ class Pgtk::Impatient
 
   # Execute a SQL query with a timeout.
   #
-  # @param [String] sql The SQL query with params inside (possibly)
+  # @param [String, Array] query The SQL query with params inside (possibly)
   # @param [Array] args List of arguments
   # @return [Array] Result rows
   # @raise [Timeout::Error] If the query takes too long
-  def exec(sql, *args)
+  def exec(query, *args)
+    sql = query.is_a?(Array) ? query.join(' ') : query
     return @pool.exec(sql, *args) if @off.any? { |re| re.match?(sql) }
     start = Time.now
     token = SecureRandom.uuid

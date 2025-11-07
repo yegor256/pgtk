@@ -70,10 +70,11 @@ class Pgtk::Pool
   # @return [String] Summary of inner state
   def dump
     [
-      "PgSQL version: #{version}",
-      "#{@pool.size} connections:",
+      'Pgtk::Pool',
+      "  PgSQL version: #{version}",
+      "  #{@pool.size} connections:",
       @pool.map do |c|
-        "  ##{c.backend_pid} #{c.pipeline_status} #{c.status} #{c.transaction_status}"
+        "    ##{c.backend_pid} #{c.pipeline_status} #{c.status} #{c.transaction_status}"
       end
     ].flatten.join("\n")
   end

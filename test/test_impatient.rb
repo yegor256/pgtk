@@ -36,7 +36,10 @@ class TestImpatient < Pgtk::Test
     fake_pool do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do
         Pgtk::Impatient.new(pool, 0.01).exec(
-          'SELECT COUNT(*) FROM generate_series(1, 1000000) AS a'
+          [
+            'SELECT COUNT(*)',
+            'FROM generate_series(1, 1000000) AS a'
+          ]
         )
       end
     end
@@ -45,7 +48,10 @@ class TestImpatient < Pgtk::Test
   def test_skips_by_regex
     fake_pool do |pool|
       Pgtk::Impatient.new(pool, 0.01, /^SELECT.*$/).exec(
-        'SELECT COUNT(*) FROM generate_series(1, 1000000) AS a'
+        [
+          'SELECT COUNT(*)',
+          'FROM generate_series(1, 1000000) AS a'
+        ]
       )
     end
   end
