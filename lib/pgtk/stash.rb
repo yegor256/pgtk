@@ -192,10 +192,12 @@ class Pgtk::Stash
           @stash[:queries][q].each_key do |k|
             next unless @stash[:queries][q][k][:stale]
             threadpool.post do
+              h = @stash[:queries][q][k]
+              ret = @pool.exec(q, h[:params], h[:result])
               @entrance.with_write_lock do
                 h = @stash[:queries][q][k]
                 h[:stale] = false
-                h[:ret] = @pool.exec(q, h[:params], h[:result])
+                h[:ret] = ret
               end
             end
           end
