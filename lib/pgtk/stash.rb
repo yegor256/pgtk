@@ -38,28 +38,24 @@ class Pgtk::Stash
   # @param [Hash] stash Optional existing stash to use (default: new empty stash)
   # @option [Hash] queries Internal cache data (default: {})
   # @option [Hash] tables Internal cache data (default: {})
-  # @option [Concurrent::ReentrantReadWriteLock] entrance Lock for write internal state
-  # @option [Concurrent::AtomicBoolean] launched Latch for start timers once
   # @param [Integer] refill_interval Interval in seconds for recalculate stale queries
   # @param [Integer] top Number of queries to recalculate
   # @param [Integer] threads Number of threads in threadpool
   # @param [Loog] loog Logger for debugging (default: null logger)
   def initialize(
     pool,
-    stash = {
-      queries: {},
-      tables: {},
-      entrance: Concurrent::ReentrantReadWriteLock.new,
-      launched: Concurrent::AtomicBoolean.new(false)
-    },
+    stash: { queries: {}, tables: {} },
     refill_interval: 5,
     top: 100,
     threads: 5,
-    loog: Loog::NULL
+    loog: Loog::NULL,
+    entrance: Concurrent::ReentrantReadWriteLock.new,
+    launched: Concurrent::AtomicBoolean.new(false)
   )
     @pool = pool
     @stash = stash
-    @entrance = stash[:entrance]
+    @launched = launched
+    @entrance = entrance
     @refill_interval = refill_interval
     @top = top
     @threads = threads
@@ -93,7 +89,7 @@ class Pgtk::Stash
       @pool.dump,
       '',
       "Pgtk::Stash (refill_interval=#{@refill_interval}s, top=#{@top}q, threads=#{@threads}t):",
-      "  #{'not ' if @stash[:launched].false?}launched",
+      "  #{'not ' if @launched.false?}launched",
       "  #{@stash[:tables].count} tables in cache",
       "  #{@stash[:queries].count} queries in cache:",
       qq.sort_by { -_1[2] }.take(20).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
@@ -128,9 +124,9 @@ class Pgtk::Stash
       if ret.nil? || @stash.dig(:queries, pure, key, :stale)
         ret = @pool.exec(pure, params, result)
         unless pure.include?(' NOW() ')
+          tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
+          raise "No tables at #{pure.inspect}" if tables.empty?
           @entrance.with_write_lock do
-            tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
-            raise "No tables at #{pure.inspect}" if tables.empty?
             tables.each do |t|
               @stash[:tables][t] = [] if @stash[:tables][t].nil?
               @stash[:tables][t].append(pure).uniq!
@@ -159,11 +155,14 @@ class Pgtk::Stash
   def transaction
     @pool.transaction do |t|
       yield Pgtk::Stash.new(
-        t, @stash,
+        t,
+        stash: @stash,
         refill_interval: @refill_interval,
         top: @top,
         threads: @threads,
-        loog: @loog
+        loog: @loog,
+        entrance: @entrance,
+        launched: @launched
       )
     end
   end
@@ -171,7 +170,7 @@ class Pgtk::Stash
   private
 
   def launch!
-    raise 'Cannot launch multiple times on same cache data' unless @stash[:launched].make_true
+    raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
     Concurrent::FixedThreadPool.new(@threads).then do |threadpool|
       Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: threadpool) do
         @entrance.with_write_lock do
