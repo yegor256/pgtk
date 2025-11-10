@@ -74,7 +74,42 @@ class Pgtk::Pool
       "  PgSQL version: #{version}",
       "  #{@pool.size} connections:",
       @pool.map do |c|
-        "    ##{c.backend_pid} #{c.pipeline_status} #{c.status} #{c.transaction_status}"
+        [
+          '    ',
+          "##{c.backend_pid}",
+          case c.pipeline_status
+          when PG::Constants::PQ_PIPELINE_ON
+            'ON'
+          when PG::Constants::PQ_PIPELINE_OFF
+            'OFF'
+          when PG::Constants::PQ_PIPELINE_ABORTED
+            'ABORTED'
+          else
+            "pipeline_status=#{c.pipeline_status}"
+          end,
+          case c.status
+          when PG::Constants::CONNECTION_OK
+            'OK'
+          when PG::Constants::CONNECTION_BAD
+            'BAD'
+          else
+            "status=#{c.status}"
+          end,
+          case c.transaction_status
+          when PG::Constants::PQTRANS_IDLE
+            'IDLE'
+          when PG::Constants::PQTRANS_ACTIVE
+            'ACTIVE'
+          when PG::Constants::PQTRANS_INTRANS
+            'INTRANS'
+          when PG::Constants::PQTRANS_INERROR
+            'INERROR'
+          when PG::Constants::PQTRANS_UNKNOWN
+            'UNKNOWN'
+          else
+            "transaction_status=#{c.transaction_status}"
+          end
+        ].join(' ')
       end
     ].flatten.join("\n")
   end

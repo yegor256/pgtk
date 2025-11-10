@@ -7,6 +7,8 @@ require 'loog'
 require 'pg'
 require 'qbash'
 require 'rake'
+require 'securerandom'
+require 'threads'
 require 'tmpdir'
 require 'yaml'
 require_relative 'test__helper'
@@ -40,6 +42,21 @@ class TestPool < Pgtk::Test
       t = pool.dump
       assert_includes(t, '4 connections')
       assert_includes(t, pool.version)
+    end
+  end
+
+  def test_dumps_different_statuses
+    fake_pool(4) do |pool|
+      Threads.new.assert do
+        10.times do
+          pool.exec(
+            'INSERT INTO book (title) VALUES ($1)',
+            [SecureRandom.hex(30)]
+          )
+          pool.dump
+          pool.exec('SELECT * FROM book')
+        end
+      end
     end
   end
 

@@ -60,6 +60,7 @@ class Pgtk::Stash
     @max_queue_length = max_queue_length
     @threads = threads
     @loog = loog
+    @tpool = Concurrent::FixedThreadPool.new(@threads)
   end
 
   # Start a new connection pool with the given arguments.
@@ -90,9 +91,12 @@ class Pgtk::Stash
       '',
       "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}):",
       "  #{'not ' if @launched.false?}launched",
-      "  #{@stash[:tables].count} tables in cache",
-      "  #{@stash[:queries].count} queries in cache:",
-      qq.sort_by { -_1[2] }.take(64).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
+      "  #{@tpool.queue_length} task(s) in the thread pool",
+      "  #{@stash[:tables].count} table(s) in cache",
+      "  #{qq.sum { |a| a[3] }} stale quer(ies) in cache:",
+      qq.select { |a| a[3].positive? }.sort_by { -_1[2] }.take(16).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" },
+      "  #{qq.count { |a| a[3].zero? }} other quer(ies) in cache:",
+      qq.select { |a| a[3].zero? }.sort_by { -_1[2] }.take(8).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
     ].join("\n")
   end
 
@@ -171,34 +175,32 @@ class Pgtk::Stash
 
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
-    Concurrent::FixedThreadPool.new(@threads).then do |tpool|
-      Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: tpool) do
-        @entrance.with_write_lock do
-          @stash[:queries].each_key do |q|
-            @stash[:queries][q].each_key do |k|
-              @stash[:queries][q][k][:popularity] = 0
-            end
+    Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: @tpool) do
+      @entrance.with_write_lock do
+        @stash[:queries].each_key do |q|
+          @stash[:queries][q].each_key do |k|
+            @stash[:queries][q][k][:popularity] = 0
           end
         end
       end
-      Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: tpool) do
-        @stash[:queries]
-          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
-          .select { _1[2] }
-          .sort_by { -_1[1] }
-          .each do |a|
-          q = a[0]
-          @stash[:queries][q].each_key do |k|
-            next unless @stash[:queries][q][k][:stale]
-            next if tpool.queue_length >= @max_queue_length
-            tpool.post do
+    end
+    Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: @tpool) do
+      @stash[:queries]
+        .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+        .select { _1[2] }
+        .sort_by { -_1[1] }
+        .each do |a|
+        q = a[0]
+        @stash[:queries][q].each_key do |k|
+          next unless @stash[:queries][q][k][:stale]
+          next if @tpool.queue_length >= @max_queue_length
+          @tpool.post do
+            h = @stash[:queries][q][k]
+            ret = @pool.exec(q, h[:params], h[:result])
+            @entrance.with_write_lock do
               h = @stash[:queries][q][k]
-              ret = @pool.exec(q, h[:params], h[:result])
-              @entrance.with_write_lock do
-                h = @stash[:queries][q][k]
-                h[:stale] = false
-                h[:ret] = ret
-              end
+              h[:stale] = false
+              h[:ret] = ret
             end
           end
         end
