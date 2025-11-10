@@ -45,9 +45,9 @@ class Pgtk::Stash
   def initialize(
     pool,
     stash: { queries: {}, tables: {} },
-    refill_interval: 5,
-    max_queue_length: 100,
-    threads: 5,
+    refill_interval: 16,
+    max_queue_length: 128,
+    threads: 4,
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     launched: Concurrent::AtomicBoolean.new(false)
