@@ -136,7 +136,7 @@ class Pgtk::Stash
               @stash[:tables][t].append(pure).uniq!
             end
             @stash[:queries][pure] ||= {}
-            @stash[:queries][pure][key] = { ret:, params:, result: }
+            @stash[:queries][pure][key] = { ret:, params:, result:, used: Time.now }
           end
         end
       end
@@ -144,6 +144,7 @@ class Pgtk::Stash
         @entrance.with_write_lock do
           @stash[:queries][pure][key][:popularity] ||= 0
           @stash[:queries][pure][key][:popularity] += 1
+          @stash[:queries][pure][key][:used] = Time.now
         end
       end
     end
@@ -178,9 +179,7 @@ class Pgtk::Stash
     Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: @tpool) do
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
-          @stash[:queries][q].each_key do |k|
-            @stash[:queries][q][k][:popularity] = 0
-          end
+          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - 60 * 60 }
         end
       end
     end

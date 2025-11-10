@@ -56,10 +56,10 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT count(*) FROM book'
-      first_result = stash.exec(query)
+      first = stash.exec(query)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
-      second_result = stash.exec(query)
-      refute_same(first_result, second_result)
+      second = stash.exec(query)
+      refute_same(first, second)
     end
   end
 
