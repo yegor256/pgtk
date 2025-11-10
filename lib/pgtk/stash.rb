@@ -176,10 +176,11 @@ class Pgtk::Stash
 
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
-    Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: @tpool) do
+    retire = 60 * 60
+    Concurrent::TimerTask.execute(execution_interval: retire, executor: @tpool) do
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
-          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - (60 * 60) }
+          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - retire }
         end
       end
     end
