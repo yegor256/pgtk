@@ -57,7 +57,8 @@ class Pgtk::Pool
     @wire = wire
     @max = max
     @log = log
-    @pool = IterableQueue.new
+    @pool = IterableQueue.new(max)
+    @started = false
   end
 
   # Get the version of PostgreSQL server.
@@ -123,9 +124,11 @@ class Pgtk::Pool
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
   def start!
+    return if @started
     @max.times do
       @pool << @wire.connection
     end
+    @started = true
     @log.debug("PostgreSQL pool started with #{@max} connections")
   end
 
@@ -219,24 +222,43 @@ class Pgtk::Pool
   #
   # This class is used internally by Pool to store database connections
   # and provide the ability to iterate over them for inspection purposes.
+  #
+  # The queue is bounded by size. When an item is taken out, it remains in
+  # the internal array but is marked as "taken". When returned, it's placed
+  # back in its original slot and marked as available.
   class IterableQueue
-    def initialize
+    def initialize(size)
+      @size = size
       @items = []
+      @taken = []
       @mutex = Mutex.new
       @condition = ConditionVariable.new
     end
 
     def <<(item)
       @mutex.synchronize do
-        @items << item
+        if @items.size < @size
+          @items << item
+          @taken << false
+        else
+          index = @items.index(item)
+          if index.nil?
+            index = @taken.index(true)
+            raise 'No taken slot found' if index.nil?
+            @items[index] = item
+          end
+          @taken[index] = false
+        end
         @condition.signal
       end
     end
 
     def pop
       @mutex.synchronize do
-        @condition.wait(@mutex) while @items.empty?
-        @items.shift
+        @condition.wait(@mutex) while @taken.all? || @items.empty?
+        index = @taken.index(false)
+        @taken[index] = true
+        @items[index]
       end
     end
 
