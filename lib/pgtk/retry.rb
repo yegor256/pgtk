@@ -16,8 +16,8 @@ require_relative '../pgtk'
 # Basic usage:
 #
 #   # Create and configure a regular pool
-#   pool = Pgtk::Pool.new(wire)
-#   pool.start!(4)
+#   pool = Pgtk::Pool.new(wire, max: 4)
+#   pool.start!
 #
 #   # Wrap the pool in a retry decorator with 3 attempts
 #   retry_pool = Pgtk::Retry.new(pool, attempts: 3)
@@ -58,8 +58,8 @@ class Pgtk::Retry
   end
 
   # Start a new connection pool with the given arguments.
-  def start!(*)
-    @pool.start!(*)
+  def start!
+    @pool.start!
   end
 
   # Get the version of PostgreSQL server.

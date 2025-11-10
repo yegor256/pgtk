@@ -64,9 +64,9 @@ class Pgtk::Stash
   end
 
   # Start a new connection pool with the given arguments.
-  def start!(*)
+  def start!
     launch!
-    @pool.start!(*)
+    @pool.start!
   end
 
   # Get the PostgreSQL server version.
@@ -179,7 +179,7 @@ class Pgtk::Stash
     Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: @tpool) do
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
-          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - 60 * 60 }
+          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - (60 * 60) }
         end
       end
     end

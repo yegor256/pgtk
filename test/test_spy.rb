@@ -51,7 +51,7 @@ class TestSpy < Pgtk::Test
         ],
         ['Start Test']
       )
-      stash.start!(1)
+      stash.start!
       result = stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
       assert_equal('Start Test', result[0]['title'])
     end

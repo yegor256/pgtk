@@ -19,8 +19,8 @@ require_relative 'wire'
 # Basic usage:
 #
 #   # Create and configure a regular pool
-#   pool = Pgtk::Pool.new(wire)
-#   pool.start!(4)
+#   pool = Pgtk::Pool.new(wire, max: 4)
+#   pool.start!
 #
 #   # Wrap the pool in a spy that tracks all executed queries
 #   queries = []
@@ -57,8 +57,8 @@ class Pgtk::Spy
   end
 
   # Start a new connection pool with the given arguments.
-  def start!(*)
-    @pool.start!(*)
+  def start!
+    @pool.start!
   end
 
   # Get the version of PostgreSQL server.

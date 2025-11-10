@@ -29,8 +29,8 @@ require_relative 'wire'
 #   )
 #
 #   # Create and start a connection pool with 4 connections
-#   pool = Pgtk::Pool.new(wire)
-#   pool.start!(4)
+#   pool = Pgtk::Pool.new(wire, max: 4)
+#   pool.start!
 #
 #   # Execute a simple query
 #   pool.exec('SELECT * FROM users')
@@ -51,9 +51,11 @@ class Pgtk::Pool
   # Constructor.
   #
   # @param [Pgtk::Wire] wire The wire
+  # @param [Integer] max Total amount of PostgreSQL connections in the pool
   # @param [Object] log The log
-  def initialize(wire, log: Loog::NULL)
+  def initialize(wire, max: 8, log: Loog::NULL)
     @wire = wire
+    @max = max
     @log = log
     @pool = IterableQueue.new
   end
@@ -120,13 +122,11 @@ class Pgtk::Pool
   # keep in mind that not all servers will allow you to have many connections
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
-  #
-  # @param [Integer] max Total amount of PostgreSQL connections in the pool
-  def start!(max = 8)
-    max.times do
+  def start!
+    @max.times do
       @pool << @wire.connection
     end
-    @log.debug("PostgreSQL pool started with #{max} connections")
+    @log.debug("PostgreSQL pool started with #{@max} connections")
   end
 
   # Make a query and return the result as an array of hashes. For example,

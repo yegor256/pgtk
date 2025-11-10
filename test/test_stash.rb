@@ -99,7 +99,7 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Start Test'])
-      stash.start!(1)
+      stash.start!
       result = stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
       assert_equal('Start Test', result[0]['title'])
     end
