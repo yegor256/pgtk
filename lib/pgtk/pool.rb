@@ -7,6 +7,7 @@ require 'pg'
 require 'loog'
 require 'tago'
 require_relative '../pgtk'
+require_relative 'version'
 require_relative 'wire'
 
 # Pool provides a connection pool for PostgreSQL database connections.
@@ -74,6 +75,7 @@ class Pgtk::Pool
   def dump
     [
       'Pgtk::Pool',
+      "  Pgtk version: #{Pgtk::VERSION}",
       "  PgSQL version: #{version}",
       "  #{@pool.size} connections:",
       @pool.map do |c|
