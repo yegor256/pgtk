@@ -39,14 +39,14 @@ class Pgtk::Stash
   # @option [Hash] queries Internal cache data (default: {})
   # @option [Hash] tables Internal cache data (default: {})
   # @param [Integer] refill_interval Interval in seconds for recalculate stale queries
-  # @param [Integer] top Number of queries to recalculate
-  # @param [Integer] threads Number of threads in threadpool
+  # @param [Integer] max_queue_length Number of refilling tasks in the queue
+  # @param [Integer] threads Number of threads in tpool
   # @param [Loog] loog Logger for debugging (default: null logger)
   def initialize(
     pool,
     stash: { queries: {}, tables: {} },
     refill_interval: 5,
-    top: 100,
+    max_queue_length: 100,
     threads: 5,
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
@@ -57,7 +57,7 @@ class Pgtk::Stash
     @launched = launched
     @entrance = entrance
     @refill_interval = refill_interval
-    @top = top
+    @max_queue_length = max_queue_length
     @threads = threads
     @loog = loog
   end
@@ -88,11 +88,11 @@ class Pgtk::Stash
     [
       @pool.dump,
       '',
-      "Pgtk::Stash (refill_interval=#{@refill_interval}s, top=#{@top}q, threads=#{@threads}t):",
+      "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}):",
       "  #{'not ' if @launched.false?}launched",
       "  #{@stash[:tables].count} tables in cache",
       "  #{@stash[:queries].count} queries in cache:",
-      qq.sort_by { -_1[2] }.take(@top).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
+      qq.sort_by { -_1[2] }.take(64).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
     ].join("\n")
   end
 
@@ -158,7 +158,7 @@ class Pgtk::Stash
         t,
         stash: @stash,
         refill_interval: @refill_interval,
-        top: @top,
+        max_queue_length: @max_queue_length,
         threads: @threads,
         loog: @loog,
         entrance: @entrance,
@@ -171,8 +171,8 @@ class Pgtk::Stash
 
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
-    Concurrent::FixedThreadPool.new(@threads).then do |threadpool|
-      Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: threadpool) do
+    Concurrent::FixedThreadPool.new(@threads).then do |tpool|
+      Concurrent::TimerTask.execute(execution_interval: 60 * 60, executor: tpool) do
         @entrance.with_write_lock do
           @stash[:queries].each_key do |q|
             @stash[:queries][q].each_key do |k|
@@ -181,17 +181,17 @@ class Pgtk::Stash
           end
         end
       end
-      Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: threadpool) do
+      Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: tpool) do
         @stash[:queries]
           .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
           .select { _1[2] }
           .sort_by { -_1[1] }
-          .first(@top)
           .each do |a|
           q = a[0]
           @stash[:queries][q].each_key do |k|
             next unless @stash[:queries][q][k][:stale]
-            threadpool.post do
+            next if tpool.queue_length >= @max_queue_length
+            tpool.post do
               h = @stash[:queries][q][k]
               ret = @pool.exec(q, h[:params], h[:result])
               @entrance.with_write_lock do
