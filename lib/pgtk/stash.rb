@@ -6,6 +6,7 @@
 require 'concurrent-ruby'
 require 'joined'
 require 'loog'
+require 'tago'
 require_relative '../pgtk'
 
 # Database query cache implementation.
@@ -79,12 +80,13 @@ class Pgtk::Stash
   def dump
     qq =
       @stash[:queries].map do |k, v|
-        [
-          k.dup, # the query
-          v.values.count, # how many keys?
-          v.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
-          v.values.count { |vv| vv[:stale] } # how many stale keys?
-        ]
+        {
+          q: k.dup, # the query
+          c: v.values.count, # how many keys?
+          p: v.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
+          s: v.values.count { |vv| vv[:stale] }, # how many stale keys?
+          u: v.values.map { |vv| vv[:used] }.max # when was it used
+        }
       end
     [
       @pool.dump,
@@ -93,10 +95,14 @@ class Pgtk::Stash
       "  #{'not ' if @launched.false?}launched",
       "  #{@tpool.queue_length} task(s) in the thread pool",
       "  #{@stash[:tables].count} table(s) in cache",
-      "  #{qq.sum { |a| a[3] }} stale quer(ies) in cache:",
-      qq.select { |a| a[3].positive? }.sort_by { -_1[2] }.take(16).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" },
-      "  #{qq.count { |a| a[3].zero? }} other quer(ies) in cache:",
-      qq.select { |a| a[3].zero? }.sort_by { -_1[2] }.take(8).map { |a| "    #{a[1]}/#{a[2]}p/#{a[3]}s: #{a[0]}" }
+      "  #{qq.sum { |a| a[:s] }} stale quer(ies) in cache:",
+      qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
+        "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
+      end,
+      "  #{qq.count { |a| a[:s].zero? }} other quer(ies) in cache:",
+      qq.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16).map do |a|
+        "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
+      end
     ].join("\n")
   end
 

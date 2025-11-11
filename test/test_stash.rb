@@ -150,8 +150,10 @@ class TestStash < Pgtk::Test
         assert_includes(d, '0 stale quer(ies) in cache')
         assert_includes(d, '2 other quer(ies) in cache')
         assert_includes(d, '1 table(s) in cache')
-        assert_includes(d, '2/15p/0s: SELECT id, title')
-        assert_includes(d, '2/8p/0s: SELECT title')
+        assert_includes(d, '2/15p/0s/')
+        assert_includes(d, ': SELECT id, title')
+        assert_includes(d, '2/8p/0s/')
+        assert_includes(d, ': SELECT title')
       end
     end
   end
@@ -165,11 +167,11 @@ class TestStash < Pgtk::Test
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
-      assert_includes(stash.dump, '1/3p/0s: SELECT id')
+      assert_includes(stash.dump, '1/3p/0s/')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
-      assert_includes(stash.dump, '1/3p/1s: SELECT id')
+      assert_includes(stash.dump, '1/3p/1s/')
       sleep refill_interval * 2
-      assert_includes(stash.dump, '1/3p/0s: SELECT id')
+      assert_includes(stash.dump, '1/3p/0s/')
     end
   end
 
