@@ -19,6 +19,12 @@ require_relative '../pgtk'
 #
 # The implementation is very naive! Use it at your own risk.
 #
+# @example Basic usage
+#   pool = Pgtk::Pool.new(...)
+#   stash = Pgtk::Stash.new(pool, cap: 1000, refill_interval: 30)
+#   stash.start!
+#   result = stash.exec('SELECT * FROM users WHERE id = $1', [42])
+#
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
 # License:: MIT
@@ -35,16 +41,24 @@ class Pgtk::Stash
 
   # Initialize a new Stash with query caching.
   #
-  # @param [Object] pool Original object
-  # @param [Hash] stash Optional existing stash to use (default: new empty stash)
-  # @option [Hash] queries Internal cache data (default: {})
-  # @option [Hash] tables Internal cache data (default: {})
-  # @param [Integer] refill_interval Interval in seconds for recalculate stale queries
-  # @param [Integer] cap How many queries to keep in cache (if more, oldest ones are deleted)
-  # @param [Integer] cap_interval Interval in seconds for cap the cache (remove old queries)
-  # @param [Integer] max_queue_length Number of refilling tasks in the queue
-  # @param [Integer] threads Number of threads in tpool
-  # @param [Loog] loog Logger for debugging (default: null logger)
+  # @param [Object] pool The underlying connection pool that executes actual database queries
+  # @param [Hash] stash Internal cache structure containing queries and tables hashes for sharing state
+  #   across transactions
+  # @param [Integer] refill_interval Interval in seconds between background tasks that recalculate stale
+  #   cached queries
+  # @param [Integer] max_queue_length Maximum number of refilling tasks allowed in the thread pool queue
+  #   before new tasks are skipped
+  # @param [Integer] threads Number of worker threads in the background thread pool for cache refilling
+  #   operations
+  # @param [Integer] cap Maximum number of cached query results to retain; oldest queries are evicted when
+  #   this limit is exceeded
+  # @param [Integer] cap_interval Interval in seconds between background tasks that enforce the cache size
+  #   cap by removing old queries
+  # @param [Loog] loog Logger instance for debugging and monitoring cache operations (default: null logger)
+  # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe cache access
+  #   shared across instances
+  # @param [Concurrent::AtomicBoolean] launched Atomic boolean flag tracking whether background tasks have
+  #   been started to prevent multiple launches
   def initialize(
     pool,
     stash: { queries: {}, tables: {} },
@@ -70,7 +84,13 @@ class Pgtk::Stash
     @tpool = Concurrent::FixedThreadPool.new(@threads)
   end
 
-  # Start a new connection pool with the given arguments.
+  # Start the connection pool and launch background cache management tasks.
+  #
+  # Initializes background timer tasks for cache refilling and size capping.
+  # The refill task periodically updates stale cached queries based on popularity.
+  # The cap task removes oldest queries when cache size exceeds the configured limit.
+  #
+  # @return [void]
   def start!
     launch!
     @pool.start!
@@ -83,6 +103,11 @@ class Pgtk::Stash
   end
 
   # Convert internal state into text.
+  #
+  # Generates a detailed report of the cache state including query counts,
+  # popularity scores, stale queries, and thread pool status.
+  #
+  # @return [String] Multi-line text representation of the current cache state
   def dump
     qq =
       @stash[:queries].map do |q, kk|
@@ -118,11 +143,14 @@ class Pgtk::Stash
   # Execute a SQL query with optional caching.
   #
   # Read queries are cached, while write queries bypass the cache and invalidate related entries.
+  # Queries containing modification keywords (INSERT, UPDATE, DELETE, etc.) are executed directly
+  # and trigger invalidation of cached queries for affected tables. Read queries (SELECT)
+  # are cached by query text and parameter values. Queries containing NOW() are never cached.
   #
-  # @param [String, Array<String>] query The SQL query to execute
-  # @param [Array] params Query parameters
-  # @param [Integer] result Should be 0 for text results, 1 for binary
-  # @return [PG::Result] Query result
+  # @param [String, Array<String>] query The SQL query to execute as a string or array of strings to be joined
+  # @param [Array] params Query parameters for placeholder substitution in prepared statements (default: empty array)
+  # @param [Integer] result Result format code where 0 requests text format and 1 requests binary format (default: 0)
+  # @return [PG::Result] Query result object containing rows and metadata from the database
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
@@ -189,10 +217,23 @@ class Pgtk::Stash
 
   private
 
+  # Calculate total number of cached query results.
+  #
+  # Counts all cached query-parameter combinations across all queries.
+  #
+  # @return [Integer] Total count of cached query results
   def stash_size
     @stash[:queries].values.sum { |kk| kk.values.size }
   end
 
+  # Launch background tasks for cache management.
+  #
+  # Starts two concurrent timer tasks: one for enforcing cache size cap by removing
+  # oldest queries, and another for refilling stale cached queries based on popularity.
+  # This method can only be called once per cache instance.
+  #
+  # @return [nil]
+  # @raise [RuntimeError] if background tasks have already been launched on this cache instance
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
     Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
