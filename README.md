@@ -220,6 +220,19 @@ require 'pgtk/stash'
 stash = Pgtk::Stash.new(pgsql)
 ```
 
+You can configure `Stash` with optional parameters:
+
+```ruby
+stash = Pgtk::Stash.new(
+  pgsql,
+  cap: 10_000,          # Maximum cached query results (default: 10,000)
+  cap_interval: 60,     # Seconds between cache size enforcement (default: 60)
+  refill_interval: 16,  # Seconds between stale query refilling (default: 16)
+  threads: 4,           # Worker threads for background refilling (default: 4)
+  max_queue_length: 128 # Maximum refilling tasks in queue (default: 128)
+)
+```
+
 `Stash` automatically caches read queries and invalidates the cache
 when tables are modified:
 
