@@ -159,7 +159,7 @@ class Pgtk::Stash
       @entrance.with_write_lock do
         tables.each do |t|
           @stash[:tables][t]&.each do |q|
-            @stash[:queries][q].each_key do |key|
+            @stash[:queries][q]&.each_key do |key|
               @stash[:queries][q][key][:stale] = true
             end
           end
