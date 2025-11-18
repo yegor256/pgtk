@@ -101,6 +101,7 @@ class Pgtk::Stash
       "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}, cap=#{@cap}, cap_interval=#{@cap_interval}):",
       # rubocop:enable Layout/LineLength
       "  #{'not ' if @launched.false?}launched",
+      "  #{stash_size} queries stashed",
       "  #{@tpool.queue_length} task(s) in the thread pool",
       "  #{@stash[:tables].count} table(s) in cache",
       "  #{qq.sum { |a| a[:s] }} stale quer(ies) in cache:",
@@ -188,12 +189,15 @@ class Pgtk::Stash
 
   private
 
+  def stash_size
+    @stash[:queries].values.sum { |kk| kk.values.size }
+  end
+
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
     Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
       loop do
-        s = @stash[:queries].values.sum { |kk| kk.values.size }
-        break if s <= @cap
+        break if stash_size <= @cap
         @entrance.with_write_lock do
           @stash[:queries].each_key do |q|
             m = @stash[:queries][q].values.map { |h| h[:used] }.min
