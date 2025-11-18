@@ -175,6 +175,23 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_caps_oldest_queries
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, cap: 1, cap_interval: 0.1)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['1984'])
+      5.times do |i|
+        stash.exec('SELECT * FROM book WHERE id = $1', [i])
+        sleep 0.01
+      end
+      stash.exec('SELECT id FROM book')
+      sleep 0.01
+      stash.exec('SELECT title FROM book')
+      sleep 0.2
+      assert_includes(stash.dump, '1/1p/0s')
+    end
+  end
+
   def test_raise_if_start_cache_refresh_multiple_times
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

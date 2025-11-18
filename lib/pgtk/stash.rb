@@ -40,6 +40,8 @@ class Pgtk::Stash
   # @option [Hash] queries Internal cache data (default: {})
   # @option [Hash] tables Internal cache data (default: {})
   # @param [Integer] refill_interval Interval in seconds for recalculate stale queries
+  # @param [Integer] cap How many queries to keep in cache (if more, oldest ones are deleted)
+  # @param [Integer] cap_interval Interval in seconds for cap the cache (remove old queries)
   # @param [Integer] max_queue_length Number of refilling tasks in the queue
   # @param [Integer] threads Number of threads in tpool
   # @param [Loog] loog Logger for debugging (default: null logger)
@@ -49,6 +51,8 @@ class Pgtk::Stash
     refill_interval: 16,
     max_queue_length: 128,
     threads: 4,
+    cap: 10_000,
+    cap_interval: 60,
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     launched: Concurrent::AtomicBoolean.new(false)
@@ -60,6 +64,8 @@ class Pgtk::Stash
     @refill_interval = refill_interval
     @max_queue_length = max_queue_length
     @threads = threads
+    @cap = cap
+    @cap_interval = cap_interval
     @loog = loog
     @tpool = Concurrent::FixedThreadPool.new(@threads)
   end
@@ -79,13 +85,13 @@ class Pgtk::Stash
   # Convert internal state into text.
   def dump
     qq =
-      @stash[:queries].map do |k, v|
+      @stash[:queries].map do |q, kk|
         {
-          q: k.dup, # the query
-          c: v.values.count, # how many keys?
-          p: v.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
-          s: v.values.count { |vv| vv[:stale] }, # how many stale keys?
-          u: v.values.map { |vv| vv[:used] }.max # when was it used
+          q: q.dup, # the query
+          c: kk.values.count, # how many keys?
+          p: kk.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
+          s: kk.values.count { |vv| vv[:stale] }, # how many stale keys?
+          u: kk.values.map { |vv| vv[:used] }.max || Time.now # when was it used
         }
       end
     [
@@ -182,11 +188,17 @@ class Pgtk::Stash
 
   def launch!
     raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
-    retire = 60 * 60
-    Concurrent::TimerTask.execute(execution_interval: retire, executor: @tpool) do
-      @entrance.with_write_lock do
-        @stash[:queries].each_key do |q|
-          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - retire }
+    Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
+      loop do
+        s = @stash[:queries].values.sum { |kk| kk.values.size }
+        break if s <= @cap
+        @entrance.with_write_lock do
+          @stash[:queries].each_key do |q|
+            m = @stash[:queries][q].values.map { |h| h[:used] }.min
+            next unless m
+            @stash[:queries][q].delete_if { |_, h| h[:used] == m }
+            @stash[:queries].delete_if { |_, kk| kk.empty? }
+          end
         end
       end
     end
