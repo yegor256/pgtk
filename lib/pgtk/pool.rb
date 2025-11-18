@@ -115,6 +115,8 @@ class Pgtk::Pool
             "transaction_status=#{c.transaction_status}"
           end
         ].join(' ')
+      rescue PG::ConnectionBad => e
+        e.message
       end
     ].flatten.join("\n")
   end
