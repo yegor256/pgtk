@@ -98,10 +98,10 @@ class Pgtk::Stash
       @pool.dump,
       '',
       # rubocop:disable Layout/LineLength
-      "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}, cap=#{@cap}, cap_interval=#{@cap_interval}):",
+      "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}, cap=#{@cap}, cap_interval=#{@cap_interval}s):",
       # rubocop:enable Layout/LineLength
       "  #{'not ' if @launched.false?}launched",
-      "  #{stash_size} queries stashed",
+      "  #{stash_size} queries stashed (#{stash_size > @cap ? 'above' : 'below'} the cap)",
       "  #{@tpool.queue_length} task(s) in the thread pool",
       "  #{@stash[:tables].count} table(s) in cache",
       "  #{qq.sum { |a| a[:s] }} stale quer(ies) in cache:",
