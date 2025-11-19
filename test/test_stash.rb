@@ -192,6 +192,17 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_retire_oldest_queries
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, retire: 0.1, cap_interval: 0.1)
+      stash.start!
+      stash.exec('SELECT * FROM book WHERE id = $1', [1])
+      assert_includes(stash.dump, '1/1p/0s')
+      sleep 0.3
+      assert_includes(stash.dump, '1/1p/0s')
+    end
+  end
+
   def test_raise_if_start_cache_refresh_multiple_times
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

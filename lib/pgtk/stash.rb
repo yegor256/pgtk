@@ -54,6 +54,9 @@ class Pgtk::Stash
   #   this limit is exceeded
   # @param [Integer] cap_interval Interval in seconds between background tasks that enforce the cache size
   #   cap by removing old queries
+  # @param [Integer] retire Maximum age in seconds to keep a query in cache after its latest usage
+  # @param [Integer] retire_interval Interval in seconds between background tasks that remove
+  #   retired queries
   # @param [Loog] loog Logger instance for debugging and monitoring cache operations (default: null logger)
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe cache access
   #   shared across instances
@@ -67,6 +70,8 @@ class Pgtk::Stash
     threads: 4,
     cap: 10_000,
     cap_interval: 60,
+    retire: 15 * 60,
+    retire_interval: 60,
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     launched: Concurrent::AtomicBoolean.new(false)
@@ -80,6 +85,8 @@ class Pgtk::Stash
     @threads = threads
     @cap = cap
     @cap_interval = cap_interval
+    @retire = retire
+    @retire_interval = retire_interval
     @loog = loog
     @tpool = Concurrent::FixedThreadPool.new(@threads)
   end
@@ -122,9 +129,19 @@ class Pgtk::Stash
     [
       @pool.dump,
       '',
-      # rubocop:disable Layout/LineLength
-      "Pgtk::Stash (refill_interval=#{@refill_interval}s, max_queue_length=#{@max_queue_length}, threads=#{@threads}, cap=#{@cap}, cap_interval=#{@cap_interval}s):",
-      # rubocop:enable Layout/LineLength
+      [
+        'Pgtk::Stash (',
+        [
+          "refill_interval=#{@refill_interval}s",
+          "max_queue_length=#{@max_queue_length}",
+          "threads=#{@threads}",
+          "cap=#{@cap}",
+          "cap_interval=#{@cap_interval}s",
+          "retire=#{@retire}",
+          "retire_interval=#{@retire_interval}s"
+        ].join(', '),
+        '):'
+      ].join,
       "  #{'not ' if @launched.false?}launched",
       "  #{stash_size} queries stashed (#{stash_size > @cap ? 'above' : 'below'} the cap)",
       "  #{@tpool.queue_length} task(s) in the thread pool",
@@ -246,6 +263,14 @@ class Pgtk::Stash
             @stash[:queries][q].delete_if { |_, h| h[:used] == m }
             @stash[:queries].delete_if { |_, kk| kk.empty? }
           end
+        end
+      end
+    end
+    Concurrent::TimerTask.execute(execution_interval: @retire_interval, executor: @tpool) do
+      @entrance.with_write_lock do
+        @stash[:queries].each_key do |q|
+          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
+          @stash[:queries].delete_if { |_, kk| kk.empty? }
         end
       end
     end
