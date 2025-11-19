@@ -111,8 +111,8 @@ class TestStash < Pgtk::Test
       stash.start!
       stash.dump.then do |d|
         assert_includes(d, 'launched')
-        assert_includes(d, '0 stale quer(ies) in cache')
-        assert_includes(d, '0 table(s) in cache')
+        assert_includes(d, '0 stale queries in cache')
+        assert_includes(d, '0 tables in cache')
       end
     end
   end
@@ -122,8 +122,8 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.dump.then do |d|
         assert_includes(d, 'not launched')
-        assert_includes(d, '0 stale quer(ies) in cache')
-        assert_includes(d, '0 table(s) in cache')
+        assert_includes(d, '0 stale queries in cache')
+        assert_includes(d, '0 tables in cache')
       end
     end
   end
@@ -147,9 +147,9 @@ class TestStash < Pgtk::Test
       end
       stash.dump.then do |d|
         assert_includes(d, '  launched')
-        assert_includes(d, '0 stale quer(ies) in cache')
-        assert_includes(d, '2 other quer(ies) in cache')
-        assert_includes(d, '1 table(s) in cache')
+        assert_includes(d, '0 stale queries in cache')
+        assert_includes(d, '2 other queries in cache')
+        assert_includes(d, '1 tables in cache')
         assert_includes(d, '2/15p/0s/')
         assert_includes(d, ': SELECT id, title')
         assert_includes(d, '2/8p/0s/')
@@ -230,7 +230,7 @@ class TestStash < Pgtk::Test
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Test'])
       stash.exec('SELECT  title  FROM    book  WHERE id = $1', [1])
       result = stash.dump
-      assert_includes(result, 'quer(ies) in cache')
+      assert_includes(result, 'queries in cache')
     end
   end
 end
