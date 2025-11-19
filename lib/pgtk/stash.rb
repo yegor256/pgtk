@@ -143,14 +143,14 @@ class Pgtk::Stash
         '):'
       ].join,
       "  #{'not ' if @launched.false?}launched",
-      "  #{stash_size} queries stashed (#{stash_size > @cap ? 'above' : 'below'} the cap)",
-      "  #{@tpool.queue_length} task(s) in the thread pool",
-      "  #{@stash[:tables].count} table(s) in cache",
-      "  #{qq.sum { |a| a[:s] }} stale quer(ies) in cache:",
+      "  #{stash_size} queries cached (#{stash_size > @cap ? 'above' : 'below'} the cap)",
+      "  #{@tpool.queue_length} tasks in the thread pool",
+      "  #{@stash[:tables].count} tables in cache",
+      "  #{qq.sum { |a| a[:s] }} stale queries in cache:",
       qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
         "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
       end,
-      "  #{qq.count { |a| a[:s].zero? }} other quer(ies) in cache:",
+      "  #{qq.count { |a| a[:s].zero? }} other queries in cache:",
       qq.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16).map do |a|
         "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
       end
