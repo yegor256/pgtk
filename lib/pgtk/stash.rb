@@ -136,6 +136,7 @@ class Pgtk::Stash
         'Pgtk::Stash (',
         [
           "refill_interval=#{@refill_interval}s",
+          "refill_delay=#{@refill_delay}s",
           "max_queue_length=#{@max_queue_length}",
           "threads=#{@threads}",
           "cap=#{@cap}",
