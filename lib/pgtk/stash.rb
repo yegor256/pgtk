@@ -177,7 +177,7 @@ class Pgtk::Stash
         tables.each do |t|
           @stash[:tables][t]&.each do |q|
             @stash[:queries][q]&.each_key do |key|
-              @stash[:queries][q][key][:stale] = true
+              @stash[:queries][q][key][:stale] = Time.now
             end
           end
         end
@@ -289,7 +289,7 @@ class Pgtk::Stash
             ret = @pool.exec(q, h[:params], h[:result])
             @entrance.with_write_lock do
               h = @stash[:queries][q][k]
-              h[:stale] = false
+              h.delete(:stale)
               h[:ret] = ret
             end
           end
