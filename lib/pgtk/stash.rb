@@ -44,18 +44,19 @@ class Pgtk::Stash
   # @param [Object] pool The underlying connection pool that executes actual database queries
   # @param [Hash] stash Internal cache structure containing queries and tables hashes for sharing state
   #   across transactions
-  # @param [Integer] refill_interval Interval in seconds between background tasks that recalculate stale
+  # @param [Float] refill_interval Interval in seconds between background tasks that recalculate stale
   #   cached queries
+  # @param [Float] refill_delay A pause in seconds we take before making a refill
   # @param [Integer] max_queue_length Maximum number of refilling tasks allowed in the thread pool queue
   #   before new tasks are skipped
   # @param [Integer] threads Number of worker threads in the background thread pool for cache refilling
   #   operations
   # @param [Integer] cap Maximum number of cached query results to retain; oldest queries are evicted when
   #   this limit is exceeded
-  # @param [Integer] cap_interval Interval in seconds between background tasks that enforce the cache size
+  # @param [Float] cap_interval Interval in seconds between background tasks that enforce the cache size
   #   cap by removing old queries
   # @param [Integer] retire Maximum age in seconds to keep a query in cache after its latest usage
-  # @param [Integer] retire_interval Interval in seconds between background tasks that remove
+  # @param [Float] retire_interval Interval in seconds between background tasks that remove
   #   retired queries
   # @param [Loog] loog Logger instance for debugging and monitoring cache operations (default: null logger)
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe cache access
@@ -66,6 +67,7 @@ class Pgtk::Stash
     pool,
     stash: { queries: {}, tables: {} },
     refill_interval: 16,
+    refill_delay: 0,
     max_queue_length: 128,
     threads: 4,
     cap: 10_000,
@@ -81,6 +83,7 @@ class Pgtk::Stash
     @launched = launched
     @entrance = entrance
     @refill_interval = refill_interval
+    @refill_delay = refill_delay
     @max_queue_length = max_queue_length
     @threads = threads
     @cap = cap
@@ -283,6 +286,7 @@ class Pgtk::Stash
         q = a[0]
         @stash[:queries][q].each_key do |k|
           next unless @stash[:queries][q][k][:stale]
+          next if @stash[:queries][q][k][:stale] > Time.now - @refill_delay
           next if @tpool.queue_length >= @max_queue_length
           @tpool.post do
             h = @stash[:queries][q][k]
