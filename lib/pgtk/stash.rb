@@ -132,15 +132,33 @@ class Pgtk::Stash
       [
         'Pgtk::Stash (',
         [
-          "refill_interval=#{@refill_interval}s",
-          "refill_delay=#{@refill_delay}s",
-          "max_queue_length=#{@max_queue_length}",
           "threads=#{@threads}",
-          "cap=#{@cap}",
-          "cap_interval=#{@cap_interval}s",
-          "retire=#{@retire}",
-          "retire_interval=#{@retire_interval}s"
-        ].join(', '),
+          "max_queue_length=#{@max_queue_length}",
+          if @refill_interval
+            [
+              "refill_interval=#{@refill_interval}s",
+              "refill_delay=#{@refill_delay}s"
+            ]
+          else
+            'no refilling'
+          end,
+          if @cap_interval
+            [
+              "cap_interval=#{@cap_interval}s",
+              "cap=#{@cap}"
+            ]
+          else
+            'no capping'
+          end,
+          if @retire_interval
+            [
+              "retire_interval=#{@retire_interval}s",
+              "retire=#{@retire}"
+            ]
+          else
+            'no retirement'
+          end
+        ].flatten.join(', '),
         '):'
       ].join,
       if @tpool
