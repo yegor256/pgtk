@@ -110,7 +110,6 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.start!
       stash.dump.then do |d|
-        assert_includes(d, 'launched')
         assert_includes(d, '0 stale queries in cache')
         assert_includes(d, '0 tables in cache')
       end
@@ -121,7 +120,7 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       stash.dump.then do |d|
-        assert_includes(d, 'not launched')
+        assert_includes(d, 'Not launched')
         assert_includes(d, '0 stale queries in cache')
         assert_includes(d, '0 tables in cache')
       end
@@ -146,7 +145,6 @@ class TestStash < Pgtk::Test
         stash.exec('SELECT title FROM book WHERE id = $1', [2])
       end
       stash.dump.then do |d|
-        assert_includes(d, '  launched')
         assert_includes(d, '0 stale queries in cache')
         assert_includes(d, '2 other queries in cache')
         assert_includes(d, '1 tables in cache')
@@ -213,16 +211,6 @@ class TestStash < Pgtk::Test
       assert_includes(stash.dump, '1/1p/0s')
       sleep 0.3
       assert_includes(stash.dump, '1/1p/0s')
-    end
-  end
-
-  def test_raise_if_start_cache_refresh_multiple_times
-    fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool)
-      stash.start!
-      assert_raises(RuntimeError) do
-        stash.start!
-      end
     end
   end
 

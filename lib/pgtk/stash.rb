@@ -61,11 +61,11 @@ class Pgtk::Stash
   # @param [Loog] loog Logger instance for debugging and monitoring cache operations (default: null logger)
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe cache access
   #   shared across instances
-  # @param [Concurrent::AtomicBoolean] launched Atomic boolean flag tracking whether background tasks have
-  #   been started to prevent multiple launches
   def initialize(
     pool,
     stash: { queries: {}, tables: {} },
+    loog: Loog::NULL,
+    entrance: Concurrent::ReentrantReadWriteLock.new,
     refill_interval: 16,
     refill_delay: 0,
     max_queue_length: 128,
@@ -73,14 +73,11 @@ class Pgtk::Stash
     cap: 10_000,
     cap_interval: 60,
     retire: 15 * 60,
-    retire_interval: 60,
-    loog: Loog::NULL,
-    entrance: Concurrent::ReentrantReadWriteLock.new,
-    launched: Concurrent::AtomicBoolean.new(false)
+    retire_interval: 60
   )
     @pool = pool
     @stash = stash
-    @launched = launched
+    @loog = loog
     @entrance = entrance
     @refill_interval = refill_interval
     @refill_delay = refill_delay
@@ -90,8 +87,6 @@ class Pgtk::Stash
     @cap_interval = cap_interval
     @retire = retire
     @retire_interval = retire_interval
-    @loog = loog
-    @tpool = Concurrent::FixedThreadPool.new(@threads)
   end
 
   # Start the connection pool and launch background cache management tasks.
@@ -102,8 +97,8 @@ class Pgtk::Stash
   #
   # @return [void]
   def start!
-    launch!
     @pool.start!
+    launch!
   end
 
   # Get the PostgreSQL server version.
@@ -146,9 +141,12 @@ class Pgtk::Stash
         ].join(', '),
         '):'
       ].join,
-      "  #{'not ' if @launched.false?}launched",
+      if @tpool
+        "  #{@tpool.queue_length} tasks in the thread pool"
+      else
+        '  Not launched yet'
+      end,
       "  #{stash_size} queries cached (#{stash_size > @cap ? 'above' : 'below'} the cap)",
-      "  #{@tpool.queue_length} tasks in the thread pool",
       "  #{@stash[:tables].count} tables in cache",
       "  #{qq.sum { |a| a[:s] }} stale queries in cache:",
       qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
@@ -226,12 +224,8 @@ class Pgtk::Stash
       yield Pgtk::Stash.new(
         t,
         stash: @stash,
-        refill_interval: @refill_interval,
-        max_queue_length: @max_queue_length,
-        threads: @threads,
         loog: @loog,
-        entrance: @entrance,
-        launched: @launched
+        entrance: @entrance
       )
     end
   end
@@ -256,28 +250,33 @@ class Pgtk::Stash
   # @return [nil]
   # @raise [RuntimeError] if background tasks have already been launched on this cache instance
   def launch!
-    raise 'Cannot launch multiple times on same cache data' unless @launched.make_true
-    Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
-      loop do
-        break if stash_size <= @cap
+    @tpool = Concurrent::FixedThreadPool.new(@threads)
+    if @cap_interval
+      Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
+        loop do
+          break if stash_size <= @cap
+          @entrance.with_write_lock do
+            @stash[:queries].each_key do |q|
+              m = @stash[:queries][q].values.map { |h| h[:used] }.min
+              next unless m
+              @stash[:queries][q].delete_if { |_, h| h[:used] == m }
+              @stash[:queries].delete_if { |_, kk| kk.empty? }
+            end
+          end
+        end
+      end
+    end
+    if @retire_interval
+      Concurrent::TimerTask.execute(execution_interval: @retire_interval, executor: @tpool) do
         @entrance.with_write_lock do
           @stash[:queries].each_key do |q|
-            m = @stash[:queries][q].values.map { |h| h[:used] }.min
-            next unless m
-            @stash[:queries][q].delete_if { |_, h| h[:used] == m }
+            @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
             @stash[:queries].delete_if { |_, kk| kk.empty? }
           end
         end
       end
     end
-    Concurrent::TimerTask.execute(execution_interval: @retire_interval, executor: @tpool) do
-      @entrance.with_write_lock do
-        @stash[:queries].each_key do |q|
-          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
-          @stash[:queries].delete_if { |_, kk| kk.empty? }
-        end
-      end
-    end
+    return unless @refill_interval
     Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: @tpool) do
       @stash[:queries]
         .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
@@ -301,6 +300,5 @@ class Pgtk::Stash
         end
       end
     end
-    nil
   end
 end
