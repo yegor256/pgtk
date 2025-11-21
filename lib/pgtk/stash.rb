@@ -41,6 +41,8 @@ class Pgtk::Stash
 
   # Initialize a new Stash with query caching.
   #
+  # Set any of the intervals to nil to disable the cron.
+  #
   # @param [Object] pool The underlying connection pool that executes actual database queries
   # @param [Hash] stash Internal cache structure containing queries and tables hashes for sharing state
   #   across transactions
