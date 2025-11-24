@@ -228,8 +228,8 @@ stash = Pgtk::Stash.new(
   cap: 10_000,          # Maximum cached query results (default: 10,000)
   cap_interval: 60,     # Seconds between cache size enforcement (default: 60)
   refill_interval: 16,  # Seconds between stale query refilling (default: 16)
-  refill_delay: 0.5,    # Seconds to wait before refilling the cache (default: 0)
-  retire: 60,           # Maximum age in seconds to keep a query in cache (default: 15 min)
+  refill_delay: 0.5,    # Seconds to wait before refilling the cache
+  retire: 60,           # Maximum age in seconds to keep a query in cache
   retire_interval: 5.5, # How often to retire (default: 60)
   threads: 4,           # Worker threads for background refilling (default: 4)
   max_queue_length: 128 # Maximum refilling tasks in queue (default: 128)
