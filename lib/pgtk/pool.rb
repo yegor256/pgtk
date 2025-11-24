@@ -314,14 +314,14 @@ class Pgtk::Pool
             end
           end
       rescue StandardError => e
-        @log.error("#{sql}: #{e.message}")
+        @log.error("#{sql} >> #{e.message}")
         raise e
       end
       lag = Time.now - start
       if lag < 1
-        @log.debug("#{sql}: #{start.ago} / #{@conn.object_id}")
+        @log.debug("#{sql} >> #{start.ago} / #{@conn.object_id}")
       else
-        @log.info("#{sql}: #{start.ago}")
+        @log.info("#{sql} >> #{start.ago}")
       end
       out
     end
