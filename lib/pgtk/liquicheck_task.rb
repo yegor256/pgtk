@@ -29,7 +29,6 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     @name = args.shift || :liquicheck
     @dir = 'liquibase'
     @pattern = '*/*.xml'
-    @errors = {}
     desc 'Check the quality of Liquibase XML files' unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
       RakeFileUtils.send(:verbose, true) do
@@ -44,51 +43,51 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
   def run
     raise "Option 'dir' is mandatory" if !@dir || @dir.empty?
     raise "Option 'pattern' is mandatory" if !@pattern || @pattern.empty?
+    errors = {}
     Dir[File.join(File.expand_path(File.join(Dir.pwd, @dir)), @pattern)].each do |f|
-      with_file(f) do
-        doc = Nokogiri::XML(File.open(f))
-        doc.remove_namespaces!
-        path = decent(doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s, 'logicalFilePath')
-        doc.xpath('databaseChangeLog/changeSet').each do |node|
-          id = decent(node.attr('id')&.to_s, 'id')
-          author = decent(node.attr('author')&.to_s, 'author')
-          context = node.attr('context')&.to_s
-          present(author) do
-            no_match(author, /\A[-_ A-Za-z0-9]+\z/) do
-              error!("author '#{author}' has illegal symbols#{' in test context' if context == 'test'}")
-            end
-          end
-          if context == 'test'
-            present(id) do
-              no_match(id, /[-a-z]+/) do
-                error!("id '#{id}' has not suffix in test context")
-              end
-            end
-            present(id, path) do
-              match(id, /[-a-z]+/) do
-                no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id.gsub(/[-a-z]/, '')}\z/) do
-                  error!("id '#{id}' is not the beginning of a logicalFilePath '#{path}' in test context")
-                end
-              end
-            end
-          else
-            present(id, path) do
-              no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id}\z/) do
-                error!("id '#{id}' is not the beginning of a logicalFilePath '#{path}'")
-              end
-            end
+      err = FileErrors.new(f, errors)
+      doc = Nokogiri::XML(File.open(f))
+      doc.remove_namespaces!
+      path = decent(doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s, 'logicalFilePath', err)
+      doc.xpath('databaseChangeLog/changeSet').each do |node|
+        id = decent(node.attr('id')&.to_s, 'ID', err)
+        author = decent(node.attr('author')&.to_s, 'author', err)
+        context = node.attr('context')&.to_s
+        present(author) do
+          no_match(author, /\A[-_ A-Za-z0-9]+\z/) do
+            err.add("author #{author.inspect} has illegal symbols#{' in test context' if context == 'test'}")
           end
         end
-        present(path) do
-          no_equal(path, File.basename(f)) do
-            error!("logicalFilePath '#{path}' does not match the xml file name '#{File.basename(f)}'")
+        if context == 'test'
+          present(id) do
+            no_match(id, /[-a-z]+/) do
+              err.add("ID #{id.inspect} has not suffix in test context")
+            end
+          end
+          present(id, path) do
+            match(id, /[-a-z]+/) do
+              no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id.gsub(/[-a-z]/, '')}\z/) do
+                err.add("ID #{id.inspect} is not the beginning of a logicalFilePath #{path.inspect} in test context")
+              end
+            end
+          end
+        else
+          present(id, path) do
+            no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id}\z/) do
+              err.add("ID #{id.inspect} is not the beginning of a logicalFilePath #{path.inspect}")
+            end
           end
         end
       end
+      present(path) do
+        no_equal(path, File.basename(f)) do
+          err.add("logicalFilePath #{path.inspect} does not match the xml file name #{File.basename(f).inspect}")
+        end
+      end
     end
-    return if @errors.empty?
+    return if errors.empty?
     puts 'There are such errors in the Liquibase XML files.'
-    @errors.each do |f, e|
+    errors.each do |f, e|
       puts "In file '#{f}':"
       e.each do |msg|
         puts "  * #{msg}"
@@ -98,23 +97,11 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     exit(1)
   end
 
-  def with_file(file, &)
-    @f = file
-    yield
-  ensure
-    @f = nil
-  end
-
-  def error!(msg)
-    return if @f.nil?
-    (@errors[@f] ||= []) << msg
-  end
-
-  def decent(prop, name)
+  def decent(prop, name, err)
     if prop.nil?
-      error!("#{name} is nil")
+      err.add("#{name} is nil")
     elsif prop.empty?
-      error!("#{name} is empty")
+      err.add("#{name} is empty")
     end
     prop
   end
@@ -133,5 +120,17 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
 
   def no_match(prop, regex, &)
     yield unless prop.match?(regex)
+  end
+
+  # Errors that were found in the specified file
+  class FileErrors
+    def initialize(filepath, errors)
+      @filepath = filepath
+      @errors = errors
+    end
+
+    def add(msg)
+      (@errors[@filepath] ||= []) << msg
+    end
   end
 end
