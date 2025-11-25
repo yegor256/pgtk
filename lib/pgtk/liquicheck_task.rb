@@ -48,14 +48,11 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
       with_file(f) do
         doc = Nokogiri::XML(File.open(f))
         doc.remove_namespaces!
-        path = doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s
-        filled!(path, 'logicalFilePath')
+        path = decent(doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s, 'logicalFilePath')
         doc.xpath('databaseChangeLog/changeSet').each do |node|
-          id = node.attr('id')&.to_s
-          author = node.attr('author')&.to_s
+          id = decent(node.attr('id')&.to_s, 'id')
+          author = decent(node.attr('author')&.to_s, 'author')
           context = node.attr('context')&.to_s
-          filled!(id, 'id')
-          filled!(author, 'author')
           present(author) do
             no_match(author, /\A[-_ A-Za-z0-9]+\z/) do
               error!("author '#{author}' has illegal symbols#{' in test context' if context == 'test'}")
@@ -113,12 +110,13 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     (@errors[@f] ||= []) << msg
   end
 
-  def filled!(prop, name)
+  def decent(prop, name)
     if prop.nil?
       error!("#{name} is nil")
     elsif prop.empty?
       error!("#{name} is empty")
     end
+    prop
   end
 
   def present(*props, &)
