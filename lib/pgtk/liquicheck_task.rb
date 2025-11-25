@@ -44,44 +44,42 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     raise "Option 'dir' is mandatory" if !@dir || @dir.empty?
     raise "Option 'pattern' is mandatory" if !@pattern || @pattern.empty?
     errors = {}
-    Dir[File.join(File.expand_path(File.join(Dir.pwd, @dir)), @pattern)].each do |f|
-      err = FileErrors.new(f, errors)
-      doc = Nokogiri::XML(File.open(f))
+    Dir[File.join(File.expand_path(File.join(Dir.pwd, @dir)), @pattern)].each do |file|
+      doc = Nokogiri::XML(File.open(file))
       doc.remove_namespaces!
-      path = decent(doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s, 'logicalFilePath', err)
-      doc.xpath('databaseChangeLog/changeSet').each do |node|
-        id = decent(node.attr('id')&.to_s, 'ID', err)
-        author = decent(node.attr('author')&.to_s, 'author', err)
-        context = node.attr('context')&.to_s
-        present(author) do
-          no_match(author, /\A[-_ A-Za-z0-9]+\z/) do
-            err.add("author #{author.inspect} has illegal symbols#{' in test context' if context == 'test'}")
-          end
-        end
-        if context == 'test'
-          present(id) do
-            no_match(id, /[-a-z]+/) do
-              err.add("ID #{id.inspect} has not suffix in test context")
-            end
-          end
-          present(id, path) do
-            match(id, /[-a-z]+/) do
-              no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id.gsub(/[-a-z]/, '')}\z/) do
-                err.add("ID #{id.inspect} is not the beginning of a logicalFilePath #{path.inspect} in test context")
-              end
-            end
-          end
-        else
-          present(id, path) do
-            no_match(path.gsub(/[-_.a-z]/, ''), /\A#{id}\z/) do
-              err.add("ID #{id.inspect} is not the beginning of a logicalFilePath #{path.inspect}")
-            end
-          end
-        end
+      path = doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s
+      on(errors, file) do
+        must_have(path, 'logicalFilePath is empty')
+        must_equal(
+          path,
+          File.basename(file),
+          "logicalFilePath #{path.inspect} does not equal the xml file name #{File.basename(file).inspect}"
+        )
       end
-      present(path) do
-        no_equal(path, File.basename(f)) do
-          err.add("logicalFilePath #{path.inspect} does not match the xml file name #{File.basename(f).inspect}")
+      doc.xpath('databaseChangeLog/changeSet').each do |node|
+        id = node.attr('id')&.to_s
+        author = node.attr('author')&.to_s
+        context = node.attr('context')&.to_s
+        on(errors, file) do
+          must_have(id, 'ID is empty')
+          must_match(id, /[-a-z]+/, "ID #{id.inspect} has not suffix in #{context} context") if context
+        end
+        on(errors, file) do
+          must_have(author, 'author is empty')
+          must_match(
+            author,
+            /\A[-_ A-Za-z0-9]+\z/,
+            "author #{author.inspect} has illegal symbols"
+          )
+        end
+        on(errors, file) do
+          must_have(id, 'ID is empty')
+          must_have(path, 'logicalFilePath is empty')
+          must_match(
+            path.gsub(/[-_.a-z]/, ''),
+            /\A#{id.gsub(/[-a-z]/, '')}\z/,
+            "ID #{id.inspect} is not the beginning of a logicalFilePath #{path.inspect}"
+          )
         end
       end
     end
@@ -89,7 +87,7 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     puts 'There are such errors in the Liquibase XML files.'
     errors.each do |f, e|
       puts "In file '#{f}':"
-      e.each do |msg|
+      e.uniq.each do |msg|
         puts "  * #{msg}"
       end
       puts
@@ -97,40 +95,24 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     exit(1)
   end
 
-  def decent(prop, name, err)
-    if prop.nil?
-      err.add("#{name} is nil")
-    elsif prop.empty?
-      err.add("#{name} is empty")
-    end
-    prop
+  def on(errors, file, &)
+    yield if block_given?
+  rescue MustError => e
+    (errors[file] ||= []) << e.message
   end
 
-  def present(*props, &)
-    yield if props.all? { !_1.nil? && !_1.empty? }
+  def must_have(prop, msg)
+    (raise MustError, msg) if prop.nil? || prop.empty?
   end
 
-  def no_equal(prop, val, &)
-    yield if prop != val
+  def must_equal(lprop, rprop, msg)
+    (raise MustError, msg) if lprop != rprop
   end
 
-  def match(prop, regex, &)
-    yield if prop.match?(regex)
+  def must_match(prop, regex, msg)
+    (raise MustError, msg) unless prop.match?(regex)
   end
 
-  def no_match(prop, regex, &)
-    yield unless prop.match?(regex)
-  end
-
-  # Errors that were found in the specified file
-  class FileErrors
-    def initialize(filepath, errors)
-      @filepath = filepath
-      @errors = errors
-    end
-
-    def add(msg)
-      (@errors[@filepath] ||= []) << msg
-    end
-  end
+  MustError = Class.new(StandardError)
+  private_constant :MustError
 end

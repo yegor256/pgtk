@@ -240,7 +240,7 @@ class TestLiquicheckTask < Pgtk::Test
       refute_empty(out)
       assert_equal(1, e)
       assert_match(/001-some-migration.xml.+\n.+author "!\*" has illegal symbols/, out)
-      assert_match(/002-some-migration.xml.+\n.+author "\\#@" has illegal symbols in test context/, out)
+      assert_match(/002-some-migration.xml.+\n.+author "\\#@" has illegal symbols/, out)
       assert_match(
         /003-some-migration.xml.+\n.+ID "00" is not the beginning of a logicalFilePath "003-some-migration.xml"/,
         out
@@ -249,10 +249,10 @@ class TestLiquicheckTask < Pgtk::Test
         /004-some-migration.xml.+\n.+ID "00-test" is not the beginning of a logicalFilePath "004-some-migration.xml"/,
         out
       )
-      assert_match(/005-some-migration.xml.+\n.+ID "005" has not suffix in test context/, out)
+      assert_match(/005-some-migration.xml.+\n.+ID "005" has not suffix/, out)
       assert_match(
         /006-some-migration.xml.+\n.+logicalFilePath\s
-        "006-other-migration.xml"\sdoes\snot\smatch\sthe\sxml\sfile\sname\s"006-some-migration.xml"/x,
+        "006-other-migration.xml"\sdoes\snot\sequal\sthe\sxml\sfile\sname\s"006-some-migration.xml"/x,
         out
       )
     end
