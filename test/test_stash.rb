@@ -76,6 +76,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_query_with_semicolon
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      assert_empty(stash.exec('SELECT * FROM book ;'))
+      assert_empty(stash.exec('SELECT * FROM book;'))
+    end
+  end
+
+  def test_raise_no_tables_error
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      assert_raises(RuntimeError) { stash.exec('SELECT 1;') }
+      assert_raises(RuntimeError) { stash.exec('SELECT * FROM generate_series(1, 5);') }
+    end
+  end
+
   def test_version
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

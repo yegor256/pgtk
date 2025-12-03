@@ -212,7 +212,7 @@ class Pgtk::Stash
       if ret.nil? || @stash.dig(:queries, pure, key, :stale)
         ret = @pool.exec(pure, params, result)
         unless pure.include?(' NOW() ')
-          tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|$)/).map(&:first).uniq
+          tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|;|$)/).map(&:first).uniq
           raise "No tables at #{pure.inspect}" if tables.empty?
           @entrance.with_write_lock do
             tables.each do |t|
