@@ -298,12 +298,12 @@ class Pgtk::Stash
     end
     return unless @refill_interval
     Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: @tpool) do
-      @stash[:queries]
-        .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
-        .select { _1[2] }
-        .sort_by { -_1[1] }
-        .each do |a|
-        q = a[0]
+      qq = @stash[:queries]
+           .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+           .select { _1[2] }
+           .sort_by { -_1[1] }
+           .map { |a| a[0] }
+      qq.each do |q|
         @stash[:queries][q].each_key do |k|
           next unless @stash[:queries][q][k][:stale]
           next if @stash[:queries][q][k][:stale] > Time.now - @refill_delay
