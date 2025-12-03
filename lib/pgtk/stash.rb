@@ -116,67 +116,69 @@ class Pgtk::Stash
   #
   # @return [String] Multi-line text representation of the current cache state
   def dump
-    qq =
-      @stash[:queries].map do |q, kk|
-        {
-          q: q.dup, # the query
-          c: kk.values.count, # how many keys?
-          p: kk.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
-          s: kk.values.count { |vv| vv[:stale] }, # how many stale keys?
-          u: kk.values.map { |vv| vv[:used] }.max || Time.now # when was it used
-        }
-      end
-    [
-      @pool.dump,
-      '',
+    @entrance.with_read_lock do
+      qq =
+        @stash[:queries].map do |q, kk|
+          {
+            q: q.dup, # the query
+            c: kk.values.count, # how many keys?
+            p: kk.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
+            s: kk.values.count { |vv| vv[:stale] }, # how many stale keys?
+            u: kk.values.map { |vv| vv[:used] }.max || Time.now # when was it used
+          }
+        end
       [
-        'Pgtk::Stash (',
+        @pool.dump,
+        '',
         [
-          "threads=#{@threads}",
-          "max_queue_length=#{@max_queue_length}",
-          if @refill_interval
-            [
-              "refill_interval=#{@refill_interval}s",
-              "refill_delay=#{@refill_delay}s"
-            ]
-          else
-            'no refilling'
-          end,
-          if @cap_interval
-            [
-              "cap_interval=#{@cap_interval}s",
-              "cap=#{@cap}"
-            ]
-          else
-            'no capping'
-          end,
-          if @retire_interval
-            [
-              "retire_interval=#{@retire_interval}s",
-              "retire=#{@retire}"
-            ]
-          else
-            'no retirement'
-          end
-        ].flatten.join(', '),
-        '):'
-      ].join,
-      if @tpool
-        "  #{@tpool.queue_length} tasks in the thread pool"
-      else
-        '  Not launched yet'
-      end,
-      "  #{stash_size} queries cached (#{stash_size > @cap ? 'above' : 'below'} the cap)",
-      "  #{@stash[:tables].count} tables in cache",
-      "  #{qq.sum { |a| a[:s] }} stale queries in cache:",
-      qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
-        "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
-      end,
-      "  #{qq.count { |a| a[:s].zero? }} other queries in cache:",
-      qq.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16).map do |a|
-        "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
-      end
-    ].join("\n")
+          'Pgtk::Stash (',
+          [
+            "threads=#{@threads}",
+            "max_queue_length=#{@max_queue_length}",
+            if @refill_interval
+              [
+                "refill_interval=#{@refill_interval}s",
+                "refill_delay=#{@refill_delay}s"
+              ]
+            else
+              'no refilling'
+            end,
+            if @cap_interval
+              [
+                "cap_interval=#{@cap_interval}s",
+                "cap=#{@cap}"
+              ]
+            else
+              'no capping'
+            end,
+            if @retire_interval
+              [
+                "retire_interval=#{@retire_interval}s",
+                "retire=#{@retire}"
+              ]
+            else
+              'no retirement'
+            end
+          ].flatten.join(', '),
+          '):'
+        ].join,
+        if @tpool
+          "  #{@tpool.queue_length} tasks in the thread pool"
+        else
+          '  Not launched yet'
+        end,
+        "  #{stash_size} queries cached (#{stash_size > @cap ? 'above' : 'below'} the cap)",
+        "  #{@stash[:tables].count} tables in cache",
+        "  #{qq.sum { |a| a[:s] }} stale queries in cache:",
+        qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
+          "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
+        end,
+        "  #{qq.count { |a| a[:s].zero? }} other queries in cache:",
+        qq.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16).map do |a|
+          "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
+        end
+      ].join("\n")
+    end
   end
 
   # Execute a SQL query with optional caching.
