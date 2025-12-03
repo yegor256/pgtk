@@ -260,7 +260,9 @@ class Pgtk::Stash
   #
   # @return [Integer] Total count of cached query results
   def stash_size
-    @stash[:queries].values.sum { |kk| kk.values.size }
+    @entrance.with_write_lock do
+      @stash[:queries].values.sum { |kk| kk.values.size }
+    end
   end
 
   # Launch background tasks for cache management.
