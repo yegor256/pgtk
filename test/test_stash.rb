@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'threads'
 require_relative 'test__helper'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/stash'
@@ -248,6 +249,32 @@ class TestStash < Pgtk::Test
       stash.exec('SELECT  title  FROM    book  WHERE id = $1', [1])
       result = stash.dump
       assert_includes(result, 'queries in cache')
+    end
+  end
+
+  # To reproduce fail test, you need add `sleep 2` to `@stash` iterator block.
+  # For example:
+  #   @stash[:queries]
+  #        .map { |k, v| sleep 2; [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+  #   ...
+  #   @stash[:queries][q].each_keys do |k|
+  #      sleep 2
+  #      # ...
+  #   end
+  def test_capture_entrance_in_stash_iterators_with_multithreading
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, threads: 1, refill_interval: 1)
+      stash.start!
+      Threads.new(10).assert(10) do
+        sleep 0.25
+        10.times do
+          stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+          stash.exec('SELECT id, title FROM book WHERE id = $1', [rand(1..100)])
+          stash.exec("SELECT id, title FROM book WHERE id = $1 OR 1 = #{rand(1..100)}", [rand(1..100)])
+          sleep 0.25
+        end
+        sleep 0.25
+      end
     end
   end
 end
