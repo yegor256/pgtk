@@ -92,8 +92,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   def run
     local = qbash('postgres -V').start_with?('postgres') && qbash('initdb -V').start_with?('initdb')
     docker = qbash('docker -v').start_with?('Docker')
-    raise 'You must have postgres or docker installed locally' unless local && docker
-    raise 'You cannot force docker to run, because it is not installed locally' if @force_docker && !docker
+    raise 'You must have PostgreSQL or Docker installed locally' unless local && docker
+    raise 'You cannot force Docker to run, because it is not installed locally' if @force_docker && !docker
     raise "Option 'dir' is mandatory" unless @dir
     raise "Option 'yaml' is mandatory" unless @yaml
     home = File.expand_path(@dir)
@@ -137,23 +137,24 @@ class Pgtk::PgsqlTask < Rake::TaskLib
 
   def run_docker(home, stdout, port)
     FileUtils.mkdir_p(home)
-    container = "pgtk-#{SecureRandom.hex(5)}"
-    qbash(
-      [
-        'docker',
-        'run',
-        "--name #{container}",
-        "--publish #{port}:5432",
-        "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
-        "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
-        "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
-        '--detach',
-        '--rm',
-        'postgres:18.1',
-        @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" }
-      ],
-      log: stdout
-    )
+    out =
+      qbash(
+        [
+          'docker',
+          'run',
+          '--name pgtk',
+          "--publish #{port}:5432",
+          "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
+          "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
+          "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
+          '--detach',
+          '--rm',
+          'postgres:18.1',
+          @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" }
+        ],
+        log: stdout
+      )
+    container = out.scan(/[a-f0-9]+\Z/).first
     File.write(File.join(home, 'docker-container'), container)
     at_exit do
       qbash("docker stop #{container}")
