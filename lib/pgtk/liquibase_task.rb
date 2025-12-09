@@ -28,6 +28,10 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   # @return [String, Array<String>]
   attr_accessor :yaml
 
+  # Path to PG entire SQL schema file, which will be dumped and overwritten after all migrations
+  # @return [String]
+  attr_accessor :schema
+
   # Whether to suppress output
   # @return [Boolean]
   attr_accessor :quiet
@@ -118,6 +122,23 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '--define',
           Shellwords.escape("liquibase.contexts=#{@contexts}")
         ]
+      )
+    end
+    return unless @schema
+    @schema = File.expand_path(@schema)
+    Dir.chdir(File.dirname(@schema)) do
+      qbash(
+        [
+          'pg_dump',
+          "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
+          "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
+          "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
+          "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
+          '-n public',
+          '--schema-only',
+          "-f #{Shellwords.escape(@schema)}"
+        ],
+        env: { 'PGPASSWORD' => Shellwords.escape(password) }
       )
     end
   end
