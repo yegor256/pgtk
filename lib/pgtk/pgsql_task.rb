@@ -10,6 +10,7 @@ require 'rake'
 require 'rake/tasklib'
 require 'random-port'
 require 'shellwords'
+require 'securerandom'
 require 'tempfile'
 require 'yaml'
 require_relative '../pgtk'
@@ -59,6 +60,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   # @return [Hash]
   attr_accessor :config
 
+  # Use force docker
+  # @return [Boolean]
+  attr_accessor :force_docker
+
   # Initialize a new PostgreSQL server task.
   #
   # @param [Array] args Task arguments
@@ -85,12 +90,97 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   private
 
   def run
+    local = qbash('postgres -V').start_with?('postgres') && qbash('initdb -V').start_with?('initdb')
+    docker = qbash('docker -v').start_with?('Docker')
+    raise 'You must have postgres or docker installed locally' unless local && docker
+    raise 'You cannot force docker to run, because it is not installed locally' if @force_docker && !docker
     raise "Option 'dir' is mandatory" unless @dir
     raise "Option 'yaml' is mandatory" unless @yaml
     home = File.expand_path(@dir)
     FileUtils.rm_rf(home) if @fresh_start
     raise "Directory/file #{home} is present, use fresh_start=true" if File.exist?(home)
     stdout = @quiet ? nil : $stdout
+    port = @port
+    if port.nil?
+      port = RandomPort::Pool::SINGLETON.acquire
+      puts "Random TCP port #{port} is used for PostgreSQL server" unless @quiet
+    else
+      puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
+    end
+    if local && !@force_docker
+      pid = run_local(home, stdout, port)
+      place = "in process ##{pid}"
+    elsif docker || @force_docker
+      container = run_docker(home, stdout, port)
+      place = "in container #{container}"
+    end
+    File.write(
+      @yaml,
+      {
+        'pgsql' => {
+          'host' => 'localhost',
+          'port' => port,
+          'dbname' => @dbname,
+          'user' => @user,
+          'password' => @password,
+          'url' => [
+            "jdbc:postgresql://localhost:#{port}/",
+            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}"
+          ].join
+        }
+      }.to_yaml
+    )
+    return if @quiet
+    puts "PostgreSQL has been started #{place}, port #{port}"
+    puts "YAML config saved to #{@yaml}"
+  end
+
+  def run_docker(home, stdout, port)
+    FileUtils.mkdir_p(home)
+    container = "pgtk-#{SecureRandom.hex(5)}"
+    qbash(
+      [
+        'docker',
+        'run',
+        "--name #{container}",
+        "--publish #{port}:5432",
+        "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
+        "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
+        "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
+        '--detach',
+        '--rm',
+        'postgres:18.1',
+        @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" }
+      ],
+      log: stdout
+    )
+    File.write(File.join(home, 'docker-container'), container)
+    at_exit do
+      qbash("docker stop #{container}")
+      puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
+    end
+    attempt = 0
+    begin
+      raise unless qbash(
+        [
+          'docker',
+          'exec',
+          container,
+          'pg_isready',
+          '-h localhost',
+          "-U #{Shellwords.escape(@user)}"
+        ]
+      ).match?('accepting')
+    rescue StandardError
+      sleep(0.1)
+      attempt += 1
+      raise "Failed to start PostgreSQL docker container #{container.inspect}" if attempt > 50
+      retry
+    end
+    container
+  end
+
+  def run_local(home, stdout, port)
     Tempfile.open do |pwfile|
       File.write(pwfile.path, @password)
       qbash(
@@ -106,13 +196,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         ],
         log: stdout
       )
-    end
-    port = @port
-    if port.nil?
-      port = RandomPort::Pool::SINGLETON.acquire
-      puts "Random TCP port #{port} is used for PostgreSQL server" unless @quiet
-    else
-      puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
     end
     cmd = [
       'postgres',
@@ -155,24 +238,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       ],
       log: stdout
     )
-    File.write(
-      @yaml,
-      {
-        'pgsql' => {
-          'host' => 'localhost',
-          'port' => port,
-          'dbname' => @dbname,
-          'user' => @user,
-          'password' => @password,
-          'url' => [
-            "jdbc:postgresql://localhost:#{port}/",
-            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}"
-          ].join
-        }
-      }.to_yaml
-    )
-    return if @quiet
-    puts "PostgreSQL has been started in process ##{pid}, port #{port}"
-    puts "YAML config saved to #{@yaml}"
+    pid
   end
 end
