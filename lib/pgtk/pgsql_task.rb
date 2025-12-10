@@ -13,6 +13,7 @@ require 'shellwords'
 require 'securerandom'
 require 'tempfile'
 require 'yaml'
+require 'waitutil'
 require_relative '../pgtk'
 
 # Pgsql rake task.
@@ -110,7 +111,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     if local && !@force_docker
       pid = run_local(home, stdout, port)
       place = "in process ##{pid}"
-    elsif docker || @force_docker
+    else
       container = run_docker(home, stdout, port)
       place = "in container #{container}"
     end
@@ -160,23 +161,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       qbash("docker stop #{container}")
       puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
     end
-    attempt = 0
     begin
-      raise unless qbash(
-        [
-          'docker',
-          'exec',
-          container,
-          'pg_isready',
-          '-h localhost',
-          "-U #{Shellwords.escape(@user)}"
-        ]
-      ).match?('accepting')
-    rescue StandardError
-      sleep(0.1)
-      attempt += 1
-      raise "Failed to start PostgreSQL docker container #{container.inspect}" if attempt > 50
-      retry
+      WaitUtil.wait_for_service('PG in Docker', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
+    rescue WaitUtil::TimeoutError => e
+      raise "Failed to start PostgreSQL Docker container #{container.inspect}: #{e.message}"
     end
     container
   end
@@ -215,19 +203,13 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       qbash("kill -TERM #{pid}", log: stdout)
       puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
-    attempt = 0
     begin
-      TCPSocket.new('localhost', port)
-    rescue StandardError => e
-      sleep(0.1)
-      attempt += 1
-      if attempt > 50
-        puts "+ #{cmd}"
-        puts "stdout:\n#{File.read(File.join(home, 'stdout.txt'))}"
-        puts "stderr:\n#{File.read(File.join(home, 'stderr.txt'))}"
-        raise "Failed to start PostgreSQL database server on port #{port}: #{e.message}"
-      end
-      retry
+      WaitUtil.wait_for_service('PG in local', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
+    rescue WaitUtil::TimeoutError => e
+      puts "+ #{cmd}"
+      puts "stdout:\n#{File.read(File.join(home, 'stdout.txt'))}"
+      puts "stderr:\n#{File.read(File.join(home, 'stderr.txt'))}"
+      raise "Failed to start PostgreSQL database server on port #{port}: #{e.message}"
     end
     qbash(
       [

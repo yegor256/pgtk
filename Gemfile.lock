@@ -11,6 +11,7 @@ PATH
       qbash (~> 0.4)
       random-port (~> 0.7)
       tago (~> 0.1)
+      waitutil (~> 0.2)
 
 GEM
   remote: https://rubygems.org/
@@ -109,6 +110,7 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.1.0)
+    waitutil (0.2.1)
     xcop (0.8.0)
       differ (~> 0.1.2)
       nokogiri (~> 1.10)

@@ -35,5 +35,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'qbash', '~>0.4'
   s.add_dependency 'random-port', '~>0.7'
   s.add_dependency 'tago', '~>0.1'
+  s.add_dependency 'waitutil', '~> 0.2'
   s.metadata['rubygems_mfa_required'] = 'true'
 end
