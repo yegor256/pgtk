@@ -33,7 +33,8 @@ GEM
     logger (1.7.0)
     loog (0.6.1)
       logger (~> 1.0)
-    minitest (5.27.0)
+    minitest (6.0.0)
+      prism (~> 1.5)
     minitest-reporters (1.7.1)
       ansi
       builder
@@ -126,7 +127,7 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  minitest (~> 5.25)
+  minitest (~> 6.0)
   minitest-reporters (~> 1.7)
   pgtk!
   rack (~> 3.1)
