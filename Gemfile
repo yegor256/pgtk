@@ -6,8 +6,10 @@
 source 'https://rubygems.org'
 gemspec
 
-gem 'minitest', '~>5.25', require: false
+gem 'minitest', '~>6.0', require: false
+gem 'minitest-mock', '~>5.27', require: false
 gem 'minitest-reporters', '~>1.7', require: false
+gem 'minitest-stub-const', '~>0.6', require: false
 gem 'rack', '~>3.1', require: false
 gem 'rake', '~>13.2', require: false
 gem 'rubocop', '~>1.73', require: false

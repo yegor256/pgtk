@@ -30,6 +30,7 @@
         <configuration>
           <driver>org.postgresql.Driver</driver>
           <verbose>false</verbose>
+          <promptOnNonLocalDatabase>false</promptOnNonLocalDatabase>
         </configuration>
         <executions>
           <execution>

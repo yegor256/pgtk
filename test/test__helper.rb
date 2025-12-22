@@ -27,7 +27,9 @@ unless SimpleCov.running || ENV['PICKS']
 end
 
 require 'minitest/autorun'
+require 'minitest/mock'
 require 'minitest/reporters'
+require 'minitest/stub_const'
 Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new]
 Minitest.load :minitest_reporter
 
