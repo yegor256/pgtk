@@ -91,8 +91,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   private
 
   def run
-    local = qbash('postgres -V').start_with?('postgres') && qbash('initdb -V').start_with?('initdb')
-    docker = qbash('docker -v').start_with?('Docker')
+    local = qbash('postgres -V; initdb -V', accept: nil, both: true)[1].zero?
+    docker = qbash('docker -v', accept: nil, both: true)[1].zero?
     raise 'You must have PostgreSQL or Docker installed locally' unless local && docker
     raise 'You cannot force Docker to run, because it is not installed locally' if @force_docker && !docker
     raise "Option 'dir' is mandatory" unless @dir
