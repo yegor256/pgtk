@@ -70,11 +70,11 @@ class Pgtk::Wire::Env
     raise "The environment variable #{@var.inspect} is not set" if v.nil?
     uri = URI(v)
     Pgtk::Wire::Direct.new(
-      host: uri.host,
+      host: CGI.unescape(uri.host),
       port: uri.port,
-      dbname: uri.path[1..],
-      user: uri.userinfo.split(':')[0],
-      password: uri.userinfo.split(':')[1]
+      dbname: CGI.unescape(uri.path[1..]),
+      user: CGI.unescape(uri.userinfo.split(':')[0]),
+      password: CGI.unescape(uri.userinfo.split(':')[1])
     ).connection
   end
 end

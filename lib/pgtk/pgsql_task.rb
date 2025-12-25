@@ -96,7 +96,8 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     docker_out = qbash('docker -v', accept: nil, both: true)
     docker = docker_out[1].zero?
     unless local || docker
-      raise "Failed to find either PostgreSQL or Docker:\n#{pg_out.first}\n#{docker_out.first}"
+      raise \
+        "Failed to find either PostgreSQL or Docker:\n#{pg_out.first}\n#{docker_out.first}"
     end
     raise 'You cannot force Docker to run, because it is not installed locally' if @force_docker && !docker
     raise "Option 'dir' is mandatory" unless @dir
@@ -161,8 +162,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     container = out.scan(/[a-f0-9]+\Z/).first
     File.write(File.join(home, 'docker-container'), container)
     at_exit do
-      qbash("docker stop #{container}")
-      puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
+      if qbash("docker ps --format '{{.ID}}' --no-trunc | grep '#{container}'", both: true, accept: nil)[1].zero?
+        qbash("docker stop #{container}")
+        puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
+      end
     end
     begin
       WaitUtil.wait_for_service('PG in Docker', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
