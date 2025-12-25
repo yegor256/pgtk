@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 ---
 # yamllint disable rule:line-length
-name: rake
+name: docker
 'on':
   push:
     branches:
@@ -11,7 +11,7 @@ name: rake
     branches:
       - master
 jobs:
-  rake:
+  docker:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
