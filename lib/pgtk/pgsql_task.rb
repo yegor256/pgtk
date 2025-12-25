@@ -147,7 +147,6 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         [
           'docker',
           'run',
-          '--name pgtk',
           "--publish #{port}:5432",
           "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
           "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
