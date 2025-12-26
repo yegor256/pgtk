@@ -52,7 +52,13 @@ class TestPgsqlTask < Pgtk::Test
       Rake::Task['p3'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
       assert(yaml['pgsql']['url'].start_with?('jdbc:postgresql://localhost'))
-      assert_path_exists(File.join(dir, 'pgsql.log'))
+      if File.exist?(File.join(dir, 'pid'))
+        assert_path_exists(File.join(dir, 'pgsql.log'))
+      elsif File.exist?(File.join(dir, 'docker-container'))
+        File.read(File.join(dir, 'docker-container')).then do |container|
+          assert_equal('ok', qbash("docker exec #{container} bash -c \"test -f #{dir}/pgsql.log && echo 'ok'\""))
+        end
+      end
     end
   end
 

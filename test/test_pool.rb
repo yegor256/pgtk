@@ -219,16 +219,32 @@ class TestPool < Pgtk::Test
         max: 1,
         log: Loog::NULL
       )
-      pool.start!
+      cycle = 0
+      loop do
+        pool.start!
+        break
+      rescue PG::ConnectionBad
+        cycle += 1
+        sleep(0.1)
+        raise "Can't connect to postgres at port #{port}" if cycle > 50
+      end
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
-      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
+      if File.exist?(File.join(dir, 'pgsql', 'pid'))
+        qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
+      elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
+        qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}", log: nil)
+      end
       cycle = 0
       loop do
         TCPSocket.new('localhost', port)
         sleep(0.1)
         cycle += 1
         if cycle > 50
-          qbash('ps -ax | grep postgres')
+          if File.exist?(File.join(dir, 'pid'))
+            qbash('ps -ax | grep postgres')
+          elsif File.exist?(File.join(dir, 'docker-container'))
+            qbash('docker ps -a | grep postgres')
+          end
           raise "Can't stop running postgres at port #{port}, for some reason"
         end
       rescue StandardError => e
