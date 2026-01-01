@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'concurrent-ruby'
@@ -26,7 +26,7 @@ require_relative '../pgtk'
 #   result = stash.exec('SELECT * FROM users WHERE id = $1', [42])
 #
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Stash
   MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze

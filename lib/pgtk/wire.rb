@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'pg'
@@ -10,14 +10,14 @@ require_relative '../pgtk'
 
 # Wires.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 module Pgtk::Wire
 end
 
 # Simple wire with details.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Direct
   # Constructor.
@@ -53,7 +53,7 @@ end
 #   postgres://user:password@host:port/dbname
 #
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Env
   # Constructor.
@@ -81,7 +81,7 @@ end
 
 # Using configuration from YAML file.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2019-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Wire::Yaml
   # Constructor.

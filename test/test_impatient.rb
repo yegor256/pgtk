@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025 Yegor Bugayenko
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'loog'
@@ -15,7 +15,7 @@ require_relative '../lib/pgtk/impatient'
 
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
-# Copyright:: Copyright (c) 2017-2025 Yegor Bugayenko
+# Copyright:: Copyright (c) 2017-2026 Yegor Bugayenko
 # License:: MIT
 class TestImpatient < Pgtk::Test
   def test_takes_version
