@@ -7,7 +7,7 @@ $stdout.sync = true
 
 require 'simplecov'
 require 'simplecov-cobertura'
-unless SimpleCov.running || ENV['PICKS']
+unless SimpleCov.running || ENV['PICKS'] || ENV['GITHUB_WORKFLOW'] == 'docker'
   SimpleCov.command_name('test')
   SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new(
     [
