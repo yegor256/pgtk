@@ -183,6 +183,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         [
           'initdb',
           '--auth=trust',
+          '--locale=en_US.UTF-8',
           '-D',
           Shellwords.escape(home),
           '--username',
