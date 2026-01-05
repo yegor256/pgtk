@@ -130,35 +130,31 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
       docker_out = qbash('docker -v', accept: nil, both: true)
       if docker_out[1].zero?
         qbash(
-          [
-            'docker',
-            'run',
-            '--rm',
-            '--network=host',
-            "-e PGPASSWORD=#{Shellwords.escape(password)}",
-            'postgres:18.1',
-            'pg_dump',
-            "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
-            "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
-            "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
-            "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
-            '-n public',
-            '--schema-only',
-            "> #{Shellwords.escape(@schema)}"
-          ]
+          'docker',
+          'run',
+          '--rm',
+          '--network=host',
+          "-e PGPASSWORD=#{Shellwords.escape(password)}",
+          'postgres:18.1',
+          'pg_dump',
+          "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
+          "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
+          "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
+          "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
+          '-n public',
+          '--schema-only',
+          "> #{Shellwords.escape(@schema)}"
         )
       else
         qbash(
-          [
-            'pg_dump',
-            "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
-            "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
-            "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
-            "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
-            '-n public',
-            '--schema-only',
-            "-f #{Shellwords.escape(@schema)}"
-          ],
+          'pg_dump',
+          "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
+          "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
+          "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
+          "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
+          '-n public',
+          '--schema-only',
+          "-f #{Shellwords.escape(@schema)}",
           env: { 'PGPASSWORD' => Shellwords.escape(password) }
         )
       end
