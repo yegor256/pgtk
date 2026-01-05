@@ -145,18 +145,16 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     FileUtils.mkdir_p(home)
     out =
       qbash(
-        [
-          'docker',
-          'run',
-          "--publish #{Shellwords.escape("#{port}:5432")}",
-          "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
-          "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
-          "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
-          '--detach',
-          '--rm',
-          'postgres:18.1',
-          @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" }
-        ],
+        'docker',
+        'run',
+        "--publish #{Shellwords.escape("#{port}:5432")}",
+        "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
+        "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
+        "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
+        '--detach',
+        '--rm',
+        'postgres:18.1',
+        @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
         log: stdout
       )
     container = out.scan(/[a-f0-9]+\Z/).first
@@ -180,17 +178,15 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     Tempfile.open do |pwfile|
       File.write(pwfile.path, @password)
       qbash(
-        [
-          'initdb',
-          '--auth=trust',
-          '--locale=en_US.UTF-8',
-          '-D',
-          Shellwords.escape(home),
-          '--username',
-          Shellwords.escape(@user),
-          '--pwfile',
-          Shellwords.escape(pwfile.path)
-        ],
+        'initdb',
+        '--auth=trust',
+        '--locale=en_US.UTF-8',
+        '-D',
+        Shellwords.escape(home),
+        '--username',
+        Shellwords.escape(@user),
+        '--pwfile',
+        Shellwords.escape(pwfile.path),
         log: stdout
       )
     end
@@ -220,13 +216,11 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       raise "Failed to start PostgreSQL database server on port #{port}: #{e.message}"
     end
     qbash(
-      [
-        'createdb',
-        '--host', 'localhost',
-        '--port', Shellwords.escape(port),
-        '--username', Shellwords.escape(@user),
-        Shellwords.escape(@dbname)
-      ],
+      'createdb',
+      '--host', 'localhost',
+      '--port', Shellwords.escape(port),
+      '--username', Shellwords.escape(@user),
+      Shellwords.escape(@dbname),
       log: stdout
     )
     pid

@@ -99,29 +99,27 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     raise "The 'password' is not set in the config (YAML)" if password.nil?
     Dir.chdir(File.dirname(@master)) do
       qbash(
-        [
-          'mvn', 'verify',
-          '--errors',
-          '--batch-mode',
-          '--fail-fast',
-          @quiet ? '--quiet' : '--debug',
-          '--file',
-          Shellwords.escape(pom),
-          '--define',
-          "liquibase.version=#{@liquibase_version}",
-          '--define',
-          "postgresql.version=#{@postgresql_version}",
-          '--define',
-          Shellwords.escape("liquibase.searchPath=#{File.dirname(@master)}"),
-          '--define',
-          Shellwords.escape("liquibase.changeLogFile=#{old ? @master : File.basename(@master)}"),
-          '--define',
-          Shellwords.escape("liquibase.url=#{url}"),
-          '--define',
-          Shellwords.escape("liquibase.password=#{password}"),
-          '--define',
-          Shellwords.escape("liquibase.contexts=#{@contexts}")
-        ]
+        'mvn', 'verify',
+        '--errors',
+        '--batch-mode',
+        '--fail-fast',
+        @quiet ? '--quiet' : '--debug',
+        '--file',
+        Shellwords.escape(pom),
+        '--define',
+        "liquibase.version=#{@liquibase_version}",
+        '--define',
+        "postgresql.version=#{@postgresql_version}",
+        '--define',
+        Shellwords.escape("liquibase.searchPath=#{File.dirname(@master)}"),
+        '--define',
+        Shellwords.escape("liquibase.changeLogFile=#{old ? @master : File.basename(@master)}"),
+        '--define',
+        Shellwords.escape("liquibase.url=#{url}"),
+        '--define',
+        Shellwords.escape("liquibase.password=#{password}"),
+        '--define',
+        Shellwords.escape("liquibase.contexts=#{@contexts}")
       )
     end
     return unless @schema
