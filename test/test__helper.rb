@@ -30,7 +30,7 @@ require 'minitest/autorun'
 require 'minitest/mock'
 require 'minitest/reporters'
 require 'minitest/stub_const'
-Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new]
+Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new(fail_fast: true)]
 Minitest.load :minitest_reporter
 
 require 'logger'
