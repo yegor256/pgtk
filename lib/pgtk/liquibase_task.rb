@@ -133,27 +133,47 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
       )
     end
     return unless @schema
-    raise 'Cannot generate schema without docker' if @docker == :never
     @schema = File.expand_path(@schema)
+    dump = qbash('pg_dump -V', accept: nil, both: true)
+    local = dump[1].zero?
+    docker = qbash('docker -v', accept: nil, both: true)[1].zero?
+    raise 'Cannot generate schema, install either pg_dump or Docker' unless local || docker
+    raise 'You set docker to :always, but Docker is not installed' if @docker == :always && !docker
     host = yml.dig('pgsql', 'host')
-    host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)
     Dir.chdir(File.dirname(@schema)) do
-      out = donce(
-        image: 'postgres:18.1',
-        args: OS.mac? ? '' : '--network=host',
-        env: { 'PGPASSWORD' => password },
-        command: [
-          'pg_dump',
-          '-h', host,
-          '-p', yml.dig('pgsql', 'port').to_s,
-          '-U', yml.dig('pgsql', 'user'),
-          '-d', yml.dig('pgsql', 'dbname'),
-          '-n', 'public',
-          '--schema-only'
-        ].shelljoin,
-        stdout: @quiet ? Loog::NULL : Loog::REGULAR,
-        stderr: Loog::REGULAR
-      )
+      out =
+        if (local && @docker != :always) || @docker == :never
+          qbash(
+            'pg_dump',
+            '-h', Shellwords.escape(host),
+            '-p', Shellwords.escape(yml.dig('pgsql', 'port').to_s),
+            '-U', Shellwords.escape(yml.dig('pgsql', 'user')),
+            '-d', Shellwords.escape(yml.dig('pgsql', 'dbname')),
+            '-n', 'public',
+            '--schema-only',
+            env: { 'PGPASSWORD' => password },
+            stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+            stderr: Loog::REGULAR
+          )
+        else
+          host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)
+          donce(
+            image: 'postgres:18.1',
+            args: OS.mac? ? '' : '--network=host',
+            env: { 'PGPASSWORD' => password },
+            command: [
+              'pg_dump',
+              '-h', host,
+              '-p', yml.dig('pgsql', 'port').to_s,
+              '-U', yml.dig('pgsql', 'user'),
+              '-d', yml.dig('pgsql', 'dbname'),
+              '-n', 'public',
+              '--schema-only'
+            ].shelljoin,
+            stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+            stderr: Loog::REGULAR
+          )
+        end
       File.write(@schema, out)
     end
   end
