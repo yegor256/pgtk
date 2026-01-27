@@ -130,7 +130,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     return unless @schema
     @schema = File.expand_path(@schema)
     host = yml.dig('pgsql', 'host')
-    host = donce_host if ['localhost', '127.0.0.1'].include?(host)
+    host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)
     Dir.chdir(File.dirname(@schema)) do
       out = donce(
         image: 'postgres:18.1',
