@@ -113,6 +113,8 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     (raise MustError, msg) unless prop.match?(regex)
   end
 
-  MustError = Class.new(StandardError)
+  class MustError < StandardError
+    # empty by design
+  end
   private_constant :MustError
 end
