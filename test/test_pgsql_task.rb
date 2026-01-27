@@ -71,7 +71,7 @@ class TestPgsqlTask < Pgtk::Test
         t.dbname = 'db'
         t.yaml = File.join(dir, 'config.yml')
         t.quiet = true
-        t.force_docker = true
+        t.docker = :always
         t.config = {
           log_min_error_statement: 'ERROR'
         }

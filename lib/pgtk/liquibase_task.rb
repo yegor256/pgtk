@@ -51,12 +51,17 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   # @return [String]
   attr_accessor :contexts
 
+  # Use docker (set to either :never, :always, or :maybe)
+  # @return [Symbol]
+  attr_accessor :docker
+
   # Initialize a new Liquibase task.
   #
   # @param [Array] args Task arguments
   # @yield [Pgtk::LiquibaseTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
+    @docker = :maybe unless @docker
     @name = args.shift || :liquibase
     @quiet = false
     @contexts = ''
@@ -128,6 +133,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
       )
     end
     return unless @schema
+    raise 'Cannot generate schema without docker' if @docker == :never
     @schema = File.expand_path(@schema)
     host = yml.dig('pgsql', 'host')
     host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)

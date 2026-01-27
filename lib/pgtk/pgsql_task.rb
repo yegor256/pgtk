@@ -61,9 +61,9 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   # @return [Hash]
   attr_accessor :config
 
-  # Use force docker
-  # @return [Boolean]
-  attr_accessor :force_docker
+  # Use docker (set to either :never, :always, or :maybe)
+  # @return [Symbol]
+  attr_accessor :docker
 
   # Initialize a new PostgreSQL server task.
   #
@@ -71,6 +71,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   # @yield [Pgtk::PgsqlTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
+    @docker = :maybe unless @docker
     @name = args.shift || :pgsql
     @fresh_start = false
     @quiet = false
@@ -99,7 +100,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       raise \
         "Failed to find either PostgreSQL or Docker:\n#{pg_out.first}\n#{docker_out.first}"
     end
-    raise 'You cannot force Docker to run, because it is not installed locally' if @force_docker && !docker
+    raise 'You cannot force Docker to run, because it is not installed locally' if @docker == :always && !docker
     raise "Option 'dir' is mandatory" unless @dir
     raise "Option 'yaml' is mandatory" unless @yaml
     home = File.expand_path(@dir)
@@ -113,7 +114,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     else
       puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
     end
-    if local && !@force_docker
+    if (local && @docker != :always) || @docker == :never
       pid = run_local(home, stdout, port)
       place = "in process ##{pid}"
     else
