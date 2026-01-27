@@ -133,7 +133,6 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     Dir.chdir(File.dirname(@schema)) do
       out = donce(
         image: 'postgres:18.1',
-        args: '--network=host',
         env: { 'PGPASSWORD' => password },
         command: [
           'pg_dump',
@@ -144,7 +143,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
           '-n', 'public',
           '--schema-only'
         ].shelljoin,
-        log: @quiet ? Loog::NULL : Loog::REGULAR
+        stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+        stderr: Loog::REGULAR
       )
       File.write(@schema, out)
     end
