@@ -89,7 +89,7 @@ class TestLiquibaseTask < Pgtk::Test
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'config.yml')
         t.schema = schema
-        t.quiet = true
+        t.quiet = false
       end
       Rake::Task['liquibase_schema'].invoke
       assert_path_exists(schema)

@@ -3,7 +3,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'donce'
 require 'English'
+require 'loog'
 require 'qbash'
 require 'rake'
 require 'rake/tasklib'
@@ -119,43 +121,32 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
         '--define',
         Shellwords.escape("liquibase.password=#{password}"),
         '--define',
-        Shellwords.escape("liquibase.contexts=#{@contexts}")
+        Shellwords.escape("liquibase.contexts=#{@contexts}"),
+        stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+        stderr: Loog::REGULAR
       )
     end
     return unless @schema
     @schema = File.expand_path(@schema)
+    host = yml.dig('pgsql', 'host')
+    host = donce_host if ['localhost', '127.0.0.1'].include?(host)
     Dir.chdir(File.dirname(@schema)) do
-      docker_out = qbash('docker -v', accept: nil, both: true)
-      if docker_out[1].zero?
-        qbash(
-          'docker',
-          'run',
-          '--rm',
-          '--network=host',
-          "-e PGPASSWORD=#{Shellwords.escape(password)}",
-          'postgres:18.1',
+      out = donce(
+        image: 'postgres:18.1',
+        args: '--network=host',
+        env: { 'PGPASSWORD' => password },
+        command: [
           'pg_dump',
-          "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
-          "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
-          "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
-          "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
-          '-n public',
-          '--schema-only',
-          "> #{Shellwords.escape(@schema)}"
-        )
-      else
-        qbash(
-          'pg_dump',
-          "-h #{Shellwords.escape(yml.dig('pgsql', 'host'))}",
-          "-p #{Shellwords.escape(yml.dig('pgsql', 'port'))}",
-          "-U #{Shellwords.escape(yml.dig('pgsql', 'user'))}",
-          "-d #{Shellwords.escape(yml.dig('pgsql', 'dbname'))}",
-          '-n public',
-          '--schema-only',
-          "-f #{Shellwords.escape(@schema)}",
-          env: { 'PGPASSWORD' => Shellwords.escape(password) }
-        )
-      end
+          '-h', host,
+          '-p', yml.dig('pgsql', 'port').to_s,
+          '-U', yml.dig('pgsql', 'user'),
+          '-d', yml.dig('pgsql', 'dbname'),
+          '-n', 'public',
+          '--schema-only'
+        ].shelljoin,
+        log: @quiet ? Loog::NULL : Loog::REGULAR
+      )
+      File.write(@schema, out)
     end
   end
 end

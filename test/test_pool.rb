@@ -230,9 +230,9 @@ class TestPool < Pgtk::Test
       end
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
       if File.exist?(File.join(dir, 'pgsql', 'pid'))
-        qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop", log: nil)
+        qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop")
       elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
-        qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}", log: nil)
+        qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}")
       end
       cycle = 0
       loop do

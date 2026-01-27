@@ -155,13 +155,15 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         '--rm',
         'postgres:18.1',
         @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
-        log: stdout
+        stdout:
       )
     container = out.scan(/[a-f0-9]+\Z/).first
     File.write(File.join(home, 'docker-container'), container)
     at_exit do
-      if qbash("docker ps --format '{{.ID}}' --no-trunc | grep '#{Shellwords.escape(container)}'",
-               both: true, accept: nil)[1].zero?
+      if qbash(
+        "docker ps --format '{{.ID}}' --no-trunc | grep '#{Shellwords.escape(container)}'",
+        both: true, accept: nil
+      )[1].zero?
         qbash("docker stop #{Shellwords.escape(container)}")
         puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
       end
@@ -187,7 +189,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         Shellwords.escape(@user),
         '--pwfile',
         Shellwords.escape(pwfile.path),
-        log: stdout
+        stdout:
       )
     end
     cmd = [
@@ -204,7 +206,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     )
     File.write(File.join(@dir, 'pid'), pid)
     at_exit do
-      qbash("kill -TERM #{Shellwords.escape(pid)}", log: stdout)
+      qbash("kill -TERM #{Shellwords.escape(pid)}", stdout:)
       puts "PostgreSQL killed in PID #{pid}" unless @quiet
     end
     begin
@@ -221,7 +223,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       '--port', Shellwords.escape(port),
       '--username', Shellwords.escape(@user),
       Shellwords.escape(@dbname),
-      log: stdout
+      stdout:
     )
     pid
   end
