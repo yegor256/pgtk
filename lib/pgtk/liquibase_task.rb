@@ -61,7 +61,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   # @yield [Pgtk::LiquibaseTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
-    @docker = :maybe unless @docker
+    @docker ||= :maybe
     @name = args.shift || :liquibase
     @quiet = false
     @contexts = ''

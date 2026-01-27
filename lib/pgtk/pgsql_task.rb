@@ -71,7 +71,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   # @yield [Pgtk::PgsqlTask, Object] Yields self and task arguments
   def initialize(*args, &task_block)
     super()
-    @docker = :maybe unless @docker
+    @docker ||= :maybe
     @name = args.shift || :pgsql
     @fresh_start = false
     @quiet = false
