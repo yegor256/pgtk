@@ -6,6 +6,7 @@
 require 'donce'
 require 'English'
 require 'loog'
+require 'os'
 require 'qbash'
 require 'rake'
 require 'rake/tasklib'
@@ -133,6 +134,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     Dir.chdir(File.dirname(@schema)) do
       out = donce(
         image: 'postgres:18.1',
+        args: OS.mac? ? '' : '--network=host',
         env: { 'PGPASSWORD' => password },
         command: [
           'pg_dump',
