@@ -61,14 +61,13 @@ class Pgtk::Wire::Env
   # @param [String] var The name of the environment variable with the connection URL
   def initialize(var = 'DATABASE_URL')
     raise "The name of the environment variable can't be nil" if var.nil?
-    @var = var
+    @value = ENV.fetch(var, nil)
+    raise "The environment variable #{@value.inspect} is not set" if @value.nil?
   end
 
   # Create a new connection to PostgreSQL server.
   def connection
-    v = ENV.fetch(@var, nil)
-    raise "The environment variable #{@var.inspect} is not set" if v.nil?
-    uri = URI(v)
+    uri = URI(@value)
     Pgtk::Wire::Direct.new(
       host: CGI.unescape(uri.host),
       port: uri.port,
