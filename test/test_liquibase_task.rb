@@ -88,6 +88,7 @@ class TestLiquibaseTask < Pgtk::Test
       Pgtk::LiquibaseTask.new(:liquibase_schema) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'config.yml')
+        t.docker = :maybe
         t.schema = schema
         t.quiet = true
       end
