@@ -64,7 +64,7 @@ GEM
     pg (1.6.3-x64-mingw-ucrt)
     pg (1.6.3-x86_64-linux)
     prism (1.8.0)
-    qbash (0.7.1)
+    qbash (0.7.2)
       backtrace (> 0)
       elapsed (> 0)
       loog (> 0)
