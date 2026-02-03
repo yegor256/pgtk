@@ -29,6 +29,7 @@ Gem::Specification.new do |s|
   s.add_dependency 'backtrace', '~>0.4'
   s.add_dependency 'concurrent-ruby', '~>1.3'
   s.add_dependency 'donce', '~>0.0'
+  s.add_dependency 'ellipsized', '~>0.3'
   s.add_dependency 'joined', '~>0.3'
   s.add_dependency 'logger', '~>1.7'
   s.add_dependency 'loog', '~>0.6'

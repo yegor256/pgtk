@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'ellipsized'
 require 'securerandom'
 require 'tago'
 require 'timeout'
@@ -112,7 +113,8 @@ class Pgtk::Impatient
         ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
         'was terminated after',
         start.ago,
-        'of waiting'
+        'of waiting: ',
+        sql.ellipsized(50).inspect
       ].compact.join(' ')
     end
   end
