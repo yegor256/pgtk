@@ -113,7 +113,7 @@ class Pgtk::Impatient
         ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
         'was terminated after',
         start.ago,
-        'of waiting: ',
+        'of waiting:',
         sql.ellipsized(50).inspect
       ].compact.join(' ')
     end
