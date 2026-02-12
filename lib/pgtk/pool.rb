@@ -314,7 +314,7 @@ class Pgtk::Pool
             end
           end
       rescue StandardError => e
-        @log.error("#{sql} >> #{e.message}")
+        @log.error("#{sql} -> #{e.message}")
         raise e
       end
       lag = Time.now - start
