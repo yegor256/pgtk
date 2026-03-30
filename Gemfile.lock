@@ -145,7 +145,7 @@ DEPENDENCIES
   os (~> 1.1)
   pgtk!
   qbash (~> 0.0)
-  rack (~> 3.1)
+  rack (~> 3.2)
   rake (~> 13.2)
   rubocop (~> 1.73)
   rubocop-minitest (~> 0.38)
