@@ -18,7 +18,7 @@ PATH
 GEM
   remote: https://rubygems.org/
   specs:
-    ansi (1.5.0)
+    ansi (1.6.0)
     ast (2.4.3)
     backtrace (0.4.1)
     builder (3.3.0)
@@ -29,6 +29,7 @@ GEM
       backtrace (~> 0.3)
       os (~> 1.1)
       qbash (~> 0.3)
+    drb (2.2.3)
     elapsed (0.3.1)
       loog (~> 0.6)
       tago (~> 0.1)
@@ -41,13 +42,14 @@ GEM
     loog (0.8.0)
       ellipsized
       logger (~> 1.0)
-    minitest (6.0.1)
+    minitest (6.0.3)
+      drb (~> 2.0)
       prism (~> 1.5)
     minitest-mock (5.27.0)
-    minitest-reporters (1.7.1)
+    minitest-reporters (1.8.0)
       ansi
       builder
-      minitest (>= 5.0)
+      minitest (>= 5.0, < 7)
       ruby-progressbar
     minitest-stub-const (0.6)
     nokogiri (1.19.1-arm64-darwin)
