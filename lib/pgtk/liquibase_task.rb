@@ -103,6 +103,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     old = @liquibase_version.match?(/^[1-3]\..+$/)
     url = yml['pgsql']['url']
     raise "The 'url' is not set in the config (YAML)" if url.nil?
+    username = yml['pgsql']['user']
+    raise "The 'user' is not set in the config (YAML)" if username.nil?
     password = yml['pgsql']['password']
     raise "The 'password' is not set in the config (YAML)" if password.nil?
     Dir.chdir(File.dirname(@master)) do
@@ -124,6 +126,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
         Shellwords.escape("liquibase.changeLogFile=#{old ? @master : File.basename(@master)}"),
         '--define',
         Shellwords.escape("liquibase.url=#{url}"),
+        '--define',
+        Shellwords.escape("liquibase.username=#{username}"),
         '--define',
         Shellwords.escape("liquibase.password=#{password}"),
         '--define',
