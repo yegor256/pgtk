@@ -34,4 +34,15 @@ class TestWire < Pgtk::Test
       refute_nil(c)
     end
   end
+
+  def test_defaults_port_to_5432_when_missing
+    fake_config do |f|
+      c = YAML.load_file(f)['pgsql']
+      v = 'DATABASE_URL_NO_PORT'
+      ENV[v] = "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}@localhost/#{CGI.escape(c['dbname'])}"
+      wire = Pgtk::Wire::Env.new(v)
+      e = assert_raises(PG::ConnectionBad, 'must attempt connection to default port') { wire.connection }
+      assert_includes(e.message, 'port 5432', 'must default to port 5432 when port is omitted from URL')
+    end
+  end
 end

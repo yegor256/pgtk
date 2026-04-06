@@ -70,7 +70,7 @@ class Pgtk::Wire::Env
     uri = URI(@value)
     Pgtk::Wire::Direct.new(
       host: CGI.unescape(uri.host),
-      port: uri.port,
+      port: uri.port || 5432,
       dbname: CGI.unescape(uri.path[1..]),
       user: CGI.unescape(uri.userinfo.split(':')[0]),
       password: CGI.unescape(uri.userinfo.split(':')[1])
