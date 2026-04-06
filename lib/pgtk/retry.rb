@@ -79,22 +79,25 @@ class Pgtk::Retry
   end
 
   # Execute a SQL query with automatic retry for SELECT queries.
+  # Also retries PG::ConnectionBad errors for all query types, since
+  # connection errors indicate the query never reached PostgreSQL.
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
   def exec(sql, *)
     query = sql.is_a?(Array) ? sql.join(' ') : sql
-    if query.strip.upcase.start_with?('SELECT')
-      attempt = 0
-      begin
-        @pool.exec(sql, *)
-      rescue StandardError => e
-        attempt += 1
-        raise e if attempt >= @attempts
-        retry
-      end
-    else
+    attempt = 0
+    begin
       @pool.exec(sql, *)
+    rescue PG::ConnectionBad => e
+      attempt += 1
+      raise e if attempt >= @attempts
+      retry
+    rescue StandardError => e
+      raise e unless query.strip.upcase.start_with?('SELECT')
+      attempt += 1
+      raise e if attempt >= @attempts
+      retry
     end
   end
 
