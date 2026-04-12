@@ -8,6 +8,38 @@ require_relative 'test__helper'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/stash'
 
+# Pool decorator that calls a block right after every exec,
+# used by tests to deterministically inject a concurrent MOD
+# into the window between @pool.exec and the stash write lock.
+class HookedPool
+  def initialize(pool, hook)
+    @pool = pool
+    @hook = hook
+  end
+
+  def start!
+    @pool.start!
+  end
+
+  def version
+    @pool.version
+  end
+
+  def dump
+    @pool.dump
+  end
+
+  def transaction(&)
+    @pool.transaction(&)
+  end
+
+  def exec(query, params = [], result = 0)
+    ret = @pool.exec(query, params, result)
+    @hook.call(query)
+    ret
+  end
+end
+
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2017-2026 Yegor Bugayenko
@@ -261,6 +293,27 @@ class TestStash < Pgtk::Test
   #      sleep 2
   #      # ...
   #   end
+  def test_preserves_stale_marker_set_during_concurrent_refill
+    fake_pool do |real_pool|
+      deleted = false
+      triggered = false
+      stash = nil
+      hook = lambda do |q|
+        next unless deleted && !triggered && q.start_with?('SELECT')
+        triggered = true
+        stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+      end
+      stash = Pgtk::Stash.new(HookedPool.new(real_pool, hook))
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      stash.exec('SELECT title FROM book')
+      stash.exec('DELETE FROM book WHERE title = $1', ['A'])
+      deleted = true
+      stash.exec('SELECT title FROM book')
+      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
+      assert_includes(titles, 'B', 'cannot see row inserted during a concurrent stash refill')
+    end
+  end
+
   def test_capture_entrance_in_stash_iterators_with_multithreading
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, threads: 1, refill_interval: 1)

@@ -210,6 +210,7 @@ class Pgtk::Stash
       key = params.map(&:to_s).join(SEPARATOR)
       ret = @stash.dig(:queries, pure, key, :ret)
       if ret.nil? || @stash.dig(:queries, pure, key, :stale)
+        stale_before = @stash.dig(:queries, pure, key, :stale)
         ret = @pool.exec(pure, params, result)
         unless pure.include?(' NOW() ')
           tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|;|$)/).map(&:first).uniq
@@ -220,7 +221,11 @@ class Pgtk::Stash
               @stash[:tables][t].append(pure).uniq!
             end
             @stash[:queries][pure] ||= {}
-            @stash[:queries][pure][key] = { ret:, params:, result:, used: Time.now }
+            existing = @stash[:queries][pure][key]
+            current_stale = existing && existing[:stale]
+            entry = { ret:, params:, result:, used: Time.now }
+            entry[:stale] = current_stale if current_stale && current_stale != stale_before
+            @stash[:queries][pure][key] = entry
           end
         end
       end
@@ -318,11 +323,12 @@ class Pgtk::Stash
           next if @tpool.queue_length >= @max_queue_length
           @tpool.post do
             h = @stash[:queries][q][k]
+            stale_before = h[:stale]
             ret = @pool.exec(q, h[:params], h[:result])
             @entrance.with_write_lock do
               h = @stash[:queries][q][k]
-              h.delete(:stale)
               h[:ret] = ret
+              h.delete(:stale) if h[:stale] == stale_before
             end
           end
         end
