@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: MIT
 
 require 'threads'
-require_relative 'test__helper'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/stash'
+require_relative 'test__helper'
 
 # Pool decorator that calls a block right after every exec,
 # used by tests to deterministically inject a concurrent MOD
@@ -47,10 +47,10 @@ end
 class TestStash < Pgtk::Test
   def test_simple_insert
     fake_pool do |pool|
-      id = Pgtk::Stash.new(pool).exec(
+      id = Integer(Pgtk::Stash.new(pool).exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['Elegant Objects']
-      )[0]['id'].to_i
+      )[0]['id'], 10)
       assert_predicate(id, :positive?)
     end
   end
@@ -78,10 +78,10 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT count(*) FROM book'
-      first_result = stash.exec(query)
-      second_result = stash.exec(query)
-      assert_equal(first_result.to_a, second_result.to_a)
-      assert_same(first_result, second_result)
+      first = stash.exec(query)
+      second = stash.exec(query)
+      assert_equal(first.to_a, second.to_a)
+      assert_same(first, second)
     end
   end
 
@@ -100,12 +100,12 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT * FROM book WHERE title = $1'
-      first_result = stash.exec(query, ['Elegant Objects'])
-      second_result = stash.exec(query, ['Elegant Objects'])
-      assert_equal(first_result.to_a, second_result.to_a)
-      assert_same(first_result, second_result)
-      different_param_result = stash.exec(query, ['Different Title'])
-      refute_same(first_result, different_param_result)
+      first = stash.exec(query, ['Elegant Objects'])
+      second = stash.exec(query, ['Elegant Objects'])
+      assert_equal(first.to_a, second.to_a)
+      assert_same(first, second)
+      different = stash.exec(query, ['Different Title'])
+      refute_same(first, different)
     end
   end
 
@@ -120,8 +120,8 @@ class TestStash < Pgtk::Test
   def test_raise_no_tables_error
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
-      assert_raises(RuntimeError) { stash.exec('SELECT 1;') }
-      assert_raises(RuntimeError) { stash.exec('SELECT * FROM generate_series(1, 5);') }
+      assert_raises(ArgumentError) { stash.exec('SELECT 1;') }
+      assert_raises(ArgumentError) { stash.exec('SELECT * FROM generate_series(1, 5);') }
     end
   end
 
@@ -206,9 +206,9 @@ class TestStash < Pgtk::Test
   end
 
   def test_cache_refills
-    refill_interval = 0.2
+    interval = 0.2
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refill_interval:)
+      stash = Pgtk::Stash.new(pool, refill: interval)
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       stash.exec('SELECT id, title FROM book WHERE title = $1 ORDER BY id DESC', ['My book'])
@@ -217,48 +217,48 @@ class TestStash < Pgtk::Test
       assert_includes(stash.dump, '1/3p/0s/')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
       assert_includes(stash.dump, '1/3p/1s/')
-      sleep refill_interval * 2
+      sleep(interval * 2)
       assert_includes(stash.dump, '1/3p/0s/')
     end
   end
 
   def test_cache_refill_respects_pause
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, refill_interval: 0.1, refill_delay: 4)
+      stash = Pgtk::Stash.new(pool, refill: 0.1, delay: 4)
       stash.start!
       stash.exec('SELECT * FROM book')
       assert_includes(stash.dump, '1/1p/0s/')
       stash.exec("INSERT INTO book (title) VALUES ('Elegant Objects')")
       assert_includes(stash.dump, '1/1p/1s/')
-      sleep 0.2
+      sleep(0.2)
       assert_includes(stash.dump, '1/1p/1s/')
     end
   end
 
   def test_caps_oldest_queries
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, cap: 1, cap_interval: 0.1)
+      stash = Pgtk::Stash.new(pool, cap: 1, capping: 0.1)
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['1984'])
       5.times do |i|
         stash.exec('SELECT * FROM book WHERE id = $1', [i])
-        sleep 0.01
+        sleep(0.01)
       end
       stash.exec('SELECT id FROM book')
-      sleep 0.01
+      sleep(0.01)
       stash.exec('SELECT title FROM book')
-      sleep 0.2
+      sleep(0.2)
       assert_includes(stash.dump, '1/1p/0s')
     end
   end
 
   def test_retire_oldest_queries
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, retire: 0.1, cap_interval: 0.1)
+      stash = Pgtk::Stash.new(pool, retire: 0.1, capping: 0.1)
       stash.start!
       stash.exec('SELECT * FROM book WHERE id = $1', [1])
       assert_includes(stash.dump, '1/1p/0s')
-      sleep 0.3
+      sleep(0.3)
       assert_includes(stash.dump, '1/1p/0s')
     end
   end
@@ -298,11 +298,12 @@ class TestStash < Pgtk::Test
       deleted = false
       triggered = false
       stash = nil
-      hook = lambda do |q|
-        next unless deleted && !triggered && q.start_with?('SELECT')
-        triggered = true
-        stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
-      end
+      hook =
+        lambda do |q|
+          next unless deleted && !triggered && q.start_with?('SELECT')
+          triggered = true
+          stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+        end
       stash = Pgtk::Stash.new(HookedPool.new(real_pool, hook))
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
       stash.exec('SELECT title FROM book')
@@ -316,17 +317,17 @@ class TestStash < Pgtk::Test
 
   def test_capture_entrance_in_stash_iterators_with_multithreading
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool, threads: 1, refill_interval: 1)
+      stash = Pgtk::Stash.new(pool, threads: 1, refill: 1)
       stash.start!
       Threads.new(10).assert(10) do
-        sleep 0.25
+        sleep(0.25)
         10.times do
           stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
           stash.exec('SELECT id, title FROM book WHERE id = $1', [rand(1..100)])
           stash.exec("SELECT id, title FROM book WHERE id = $1 OR 1 = #{rand(1..100)}", [rand(1..100)])
-          sleep 0.25
+          sleep(0.25)
         end
-        sleep 0.25
+        sleep(0.25)
       end
     end
   end

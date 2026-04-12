@@ -5,8 +5,8 @@
 
 require 'cgi'
 require 'yaml'
-require_relative 'test__helper'
 require_relative '../lib/pgtk/wire'
+require_relative 'test__helper'
 
 # Wire test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -35,7 +35,7 @@ class TestWire < Pgtk::Test
     end
   end
 
-  def test_defaults_port_to_5432_when_missing
+  def test_defaults_port_when_missing
     fake_config do |f|
       c = YAML.load_file(f)['pgsql']
       v = 'DATABASE_URL_NO_PORT'

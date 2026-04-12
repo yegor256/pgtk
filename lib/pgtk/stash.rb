@@ -21,7 +21,7 @@ require_relative '../pgtk'
 #
 # @example Basic usage
 #   pool = Pgtk::Pool.new(...)
-#   stash = Pgtk::Stash.new(pool, cap: 1000, refill_interval: 30)
+#   stash = Pgtk::Stash.new(pool, cap: 1000, refill: 30)
 #   stash.start!
 #   result = stash.exec('SELECT * FROM users WHERE id = $1', [42])
 #
@@ -43,59 +43,47 @@ class Pgtk::Stash
   #
   # Set any of the intervals to nil to disable the cron.
   #
-  # @param [Object] pool The underlying connection pool that executes actual database queries
-  # @param [Hash] stash Internal cache structure containing queries and tables hashes for sharing state
-  #   across transactions
-  # @param [Float] refill_interval Interval in seconds between background tasks that recalculate stale
-  #   cached queries
-  # @param [Float] refill_delay A pause in seconds we take before making a refill
-  # @param [Integer] max_queue_length Maximum number of refilling tasks allowed in the thread pool queue
-  #   before new tasks are skipped
-  # @param [Integer] threads Number of worker threads in the background thread pool for cache refilling
-  #   operations
-  # @param [Integer] cap Maximum number of cached query results to retain; oldest queries are evicted when
-  #   this limit is exceeded
-  # @param [Float] cap_interval Interval in seconds between background tasks that enforce the cache size
-  #   cap by removing old queries
-  # @param [Integer] retire Maximum age in seconds to keep a query in cache after its latest usage
-  # @param [Float] retire_interval Interval in seconds between background tasks that remove
-  #   retired queries
-  # @param [Loog] loog Logger instance for debugging and monitoring cache operations (default: null logger)
-  # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe cache access
-  #   shared across instances
+  # @param [Object] pool The underlying connection pool
+  # @param [Hash] stash Internal cache structure
+  # @param [Float] refill Interval in seconds between background refill tasks
+  # @param [Float] delay A pause in seconds before making a refill
+  # @param [Integer] maxqueue Maximum number of refilling tasks in the thread pool queue
+  # @param [Integer] threads Number of worker threads for cache refilling
+  # @param [Integer] cap Maximum number of cached query results to retain
+  # @param [Float] capping Interval in seconds between cache cap enforcement tasks
+  # @param [Integer] retire Maximum age in seconds to keep a query in cache
+  # @param [Float] retirement Interval in seconds between retirement tasks
+  # @param [Loog] loog Logger instance
+  # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
   def initialize(
     pool,
     stash: { queries: {}, tables: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
-    refill_interval: 16,
-    refill_delay: 0,
-    max_queue_length: 128,
+    refill: 16,
+    delay: 0,
+    maxqueue: 128,
     threads: 4,
     cap: 10_000,
-    cap_interval: 60,
+    capping: 60,
     retire: 15 * 60,
-    retire_interval: 60
+    retirement: 60
   )
     @pool = pool
     @stash = stash
     @loog = loog
     @entrance = entrance
-    @refill_interval = refill_interval
-    @refill_delay = refill_delay
-    @max_queue_length = max_queue_length
+    @refill = refill
+    @delay = delay
+    @maxqueue = maxqueue
     @threads = threads
     @cap = cap
-    @cap_interval = cap_interval
+    @capping = capping
     @retire = retire
-    @retire_interval = retire_interval
+    @retirement = retirement
   end
 
   # Start the connection pool and launch background cache management tasks.
-  #
-  # Initializes background timer tasks for cache refilling and size capping.
-  # The refill task periodically updates stale cached queries based on popularity.
-  # The cap task removes oldest queries when cache size exceeds the configured limit.
   #
   # @return [void]
   def start!
@@ -111,160 +99,177 @@ class Pgtk::Stash
 
   # Convert internal state into text.
   #
-  # Generates a detailed report of the cache state including query counts,
-  # popularity scores, stale queries, and thread pool status.
-  #
   # @return [String] Multi-line text representation of the current cache state
   def dump
     @entrance.with_read_lock do
-      qq =
-        @stash[:queries].map do |q, kk|
-          {
-            q: q.dup, # the query
-            c: kk.values.count, # how many keys?
-            p: kk.values.sum { |vv| vv[:popularity] }, # total popularity of all keys
-            s: kk.values.count { |vv| vv[:stale] }, # how many stale keys?
-            u: kk.values.map { |vv| vv[:used] }.max || Time.now # when was it used
-          }
-        end
-      [
-        @pool.dump,
-        '',
-        [
-          'Pgtk::Stash (',
-          [
-            "threads=#{@threads}",
-            "max_queue_length=#{@max_queue_length}",
-            if @refill_interval
-              [
-                "refill_interval=#{@refill_interval}s",
-                "refill_delay=#{@refill_delay}s"
-              ]
-            else
-              'no refilling'
-            end,
-            if @cap_interval
-              [
-                "cap_interval=#{@cap_interval}s",
-                "cap=#{@cap}"
-              ]
-            else
-              'no capping'
-            end,
-            if @retire_interval
-              [
-                "retire_interval=#{@retire_interval}s",
-                "retire=#{@retire}"
-              ]
-            else
-              'no retirement'
-            end
-          ].flatten.join(', '),
-          '):'
-        ].join,
-        if @tpool
-          "  #{@tpool.queue_length} tasks in the thread pool"
-        else
-          '  Not launched yet'
-        end,
-        "  #{stash_size} queries cached (#{stash_size > @cap ? 'above' : 'below'} the cap)",
-        "  #{@stash[:tables].count} tables in cache",
-        "  #{qq.sum { |a| a[:s] }} stale queries in cache:",
-        qq.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8).map do |a|
-          "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
-        end,
-        "  #{qq.count { |a| a[:s].zero? }} other queries in cache:",
-        qq.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16).map do |a|
-          "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}"
-        end
-      ].join("\n")
+      qq = queries
+      body(qq)
     end
   end
 
   # Execute a SQL query with optional caching.
   #
-  # Read queries are cached, while write queries bypass the cache and invalidate related entries.
-  # Queries containing modification keywords (INSERT, UPDATE, DELETE, etc.) are executed directly
-  # and trigger invalidation of cached queries for affected tables. Read queries (SELECT)
-  # are cached by query text and parameter values. Queries containing NOW() are never cached.
-  #
-  # @param [String, Array<String>] query The SQL query to execute as a string or array of strings to be joined
-  # @param [Array] params Query parameters for placeholder substitution in prepared statements (default: empty array)
-  # @param [Integer] result Result format code where 0 requests text format and 1 requests binary format (default: 0)
-  # @return [PG::Result] Query result object containing rows and metadata from the database
+  # @param [String, Array<String>] query The SQL query
+  # @param [Array] params Query parameters
+  # @param [Integer] result Result format code
+  # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
-      tables = pure.scan(ALTS_RE).map(&:first).uniq
-      ret = @pool.exec(pure, params, result)
-      @entrance.with_write_lock do
-        tables.each do |t|
-          @stash[:tables][t]&.each do |q|
-            @stash[:queries][q]&.each_key do |key|
-              @stash[:queries][q][key][:stale] = Time.now
-            end
-          end
-        end
-      end
+      modify(pure, params, result)
     else
-      key = params.map(&:to_s).join(SEPARATOR)
-      ret = @stash.dig(:queries, pure, key, :ret)
-      if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-        stale_before = @stash.dig(:queries, pure, key, :stale)
-        ret = @pool.exec(pure, params, result)
-        unless pure.include?(' NOW() ')
-          tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|;|$)/).map(&:first).uniq
-          raise "No tables at #{pure.inspect}" if tables.empty?
-          @entrance.with_write_lock do
-            tables.each do |t|
-              @stash[:tables][t] = [] if @stash[:tables][t].nil?
-              @stash[:tables][t].append(pure).uniq!
-            end
-            @stash[:queries][pure] ||= {}
-            existing = @stash[:queries][pure][key]
-            current_stale = existing && existing[:stale]
-            entry = { ret:, params:, result:, used: Time.now }
-            entry[:stale] = current_stale if current_stale && current_stale != stale_before
-            @stash[:queries][pure][key] = entry
-          end
+      select(pure, params, result)
+    end
+  end
+
+  # Execute a database transaction.
+  #
+  # @yield [Pgtk::Stash] A stash connected to the transaction
+  # @return [Object] The result of the block
+  def transaction
+    @pool.transaction do |t|
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
+    end
+  end
+
+  private
+
+  def queries
+    @stash[:queries].map do |q, kk|
+      {
+        q: q.dup,
+        c: kk.values.count,
+        p: kk.values.sum { |vv| vv[:popularity] },
+        s: kk.values.count { |vv| vv[:stale] },
+        u: kk.values.map { |vv| vv[:used] }.max || Time.now
+      }
+    end
+  end
+
+  def body(list)
+    [
+      @pool.dump,
+      '',
+      header,
+      if @tpool
+        "  #{@tpool.queue_length} tasks in the thread pool"
+      else
+        '  Not launched yet'
+      end,
+      "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap)",
+      "  #{@stash[:tables].count} tables in cache",
+      "  #{list.sum { |a| a[:s] }} stale queries in cache:",
+      stale(list),
+      "  #{list.count { |a| a[:s].zero? }} other queries in cache:",
+      fresh(list)
+    ].join("\n")
+  end
+
+  def header
+    [
+      'Pgtk::Stash (',
+      [
+        "threads=#{@threads}",
+        "maxqueue=#{@maxqueue}",
+        if @refill
+          [
+            "refill=#{@refill}s",
+            "delay=#{@delay}s"
+          ]
+        else
+          'no refilling'
+        end,
+        if @capping
+          [
+            "capping=#{@capping}s",
+            "cap=#{@cap}"
+          ]
+        else
+          'no capping'
+        end,
+        if @retirement
+          [
+            "retirement=#{@retirement}s",
+            "retire=#{@retire}"
+          ]
+        else
+          'no retirement'
         end
-      end
-      if @stash.dig(:queries, pure, key)
-        @entrance.with_write_lock do
-          @stash[:queries][pure][key][:popularity] ||= 0
-          @stash[:queries][pure][key][:popularity] += 1
-          @stash[:queries][pure][key][:used] = Time.now
+      ].flatten.join(', '),
+      '):'
+    ].join
+  end
+
+  def stale(list)
+    items = list.select { |a| a[:s].positive? }.sort_by { -_1[:p] }.take(8)
+    items.map! { |a| "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}" }
+    items
+  end
+
+  def fresh(list)
+    items = list.select { |a| a[:s].zero? }.sort_by { -_1[:p] }.take(16)
+    items.map! { |a| "    #{a[:c]}/#{a[:p]}p/#{a[:s]}s/#{a[:u].ago}: #{a[:q]}" }
+    items
+  end
+
+  def modify(pure, params, result)
+    tables = pure.scan(ALTS_RE).flatten
+    tables.uniq!
+    ret = @pool.exec(pure, params, result)
+    @entrance.with_write_lock do
+      tables.each do |t|
+        @stash[:tables][t]&.each do |q|
+          @stash[:queries][q]&.each_key do |key|
+            @stash[:queries][q][key][:stale] = Time.now
+          end
         end
       end
     end
     ret
   end
 
-  # Execute a database transaction.
-  #
-  # Yields a new Stash that shares the same cache but uses the transaction connection.
-  #
-  # @yield [Pgtk::Stash] A stash connected to the transaction
-  # @return [Object] The result of the block
-  def transaction
-    @pool.transaction do |t|
-      yield Pgtk::Stash.new(
-        t,
-        stash: @stash,
-        loog: @loog,
-        entrance: @entrance
-      )
+  def select(pure, params, result)
+    key = params.join(SEPARATOR)
+    ret = @stash.dig(:queries, pure, key, :ret)
+    if ret.nil? || @stash.dig(:queries, pure, key, :stale)
+      mark = @stash.dig(:queries, pure, key, :stale)
+      ret = @pool.exec(pure, params, result)
+      cache(pure, key, params, result, ret, mark) unless pure.include?(' NOW() ')
+    end
+    bump(pure, key) if @stash.dig(:queries, pure, key)
+    ret
+  end
+
+  def cache(pure, key, params, result, ret, mark)
+    tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|;|$)/).flatten
+    tables.uniq!
+    raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
+    @entrance.with_write_lock do
+      tables.each do |t|
+        @stash[:tables][t] = [] if @stash[:tables][t].nil?
+        @stash[:tables][t].append(pure).uniq!
+      end
+      @stash[:queries][pure] ||= {}
+      existing = @stash[:queries][pure][key]
+      stale = existing && existing[:stale]
+      entry = { ret:, params:, result:, used: Time.now }
+      entry[:stale] = stale if stale && stale != mark
+      @stash[:queries][pure][key] = entry
     end
   end
 
-  private
+  def bump(pure, key)
+    @entrance.with_write_lock do
+      @stash[:queries][pure][key][:popularity] ||= 0
+      @stash[:queries][pure][key][:popularity] += 1
+      @stash[:queries][pure][key][:used] = Time.now
+    end
+  end
 
   # Calculate total number of cached query results.
   #
-  # Counts all cached query-parameter combinations across all queries.
-  #
   # @return [Integer] Total count of cached query results
-  def stash_size
+  def cached
     @entrance.with_write_lock do
       @stash[:queries].values.sum { |kk| kk.values.size }
     end
@@ -272,65 +277,69 @@ class Pgtk::Stash
 
   # Launch background tasks for cache management.
   #
-  # Starts two concurrent timer tasks: one for enforcing cache size cap by removing
-  # oldest queries, and another for refilling stale cached queries based on popularity.
-  # This method can only be called once per cache instance.
-  #
   # @return [nil]
-  # @raise [RuntimeError] if background tasks have already been launched on this cache instance
   def launch!
     @tpool = Concurrent::FixedThreadPool.new(@threads)
-    if @cap_interval
-      Concurrent::TimerTask.execute(execution_interval: @cap_interval, executor: @tpool) do
-        loop do
-          break if stash_size <= @cap
-          @entrance.with_write_lock do
-            @stash[:queries].each_key do |q|
-              m = @stash[:queries][q].values.map { |h| h[:used] }.min
-              next unless m
-              @stash[:queries][q].delete_if { |_, h| h[:used] == m }
-              @stash[:queries].delete_if { |_, kk| kk.empty? }
-            end
-          end
-        end
-      end
-    end
-    if @retire_interval
-      Concurrent::TimerTask.execute(execution_interval: @retire_interval, executor: @tpool) do
+    capper! if @capping
+    retiree! if @retirement
+    refiller! if @refill
+  end
+
+  def capper!
+    Concurrent::TimerTask.execute(execution_interval: @capping, executor: @tpool) do
+      loop do
+        break if cached <= @cap
         @entrance.with_write_lock do
           @stash[:queries].each_key do |q|
-            @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
+            m = @stash[:queries][q].values.map { |h| h[:used] }.min
+            next unless m
+            @stash[:queries][q].delete_if { |_, h| h[:used] == m }
             @stash[:queries].delete_if { |_, kk| kk.empty? }
           end
         end
       end
     end
-    return unless @refill_interval
-    Concurrent::TimerTask.execute(execution_interval: @refill_interval, executor: @tpool) do
-      qq =
-        @entrance.with_write_lock do
-          @stash[:queries]
-            .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+  end
+
+  def retiree!
+    Concurrent::TimerTask.execute(execution_interval: @retirement, executor: @tpool) do
+      @entrance.with_write_lock do
+        @stash[:queries].each_key do |q|
+          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
+          @stash[:queries].delete_if { |_, kk| kk.empty? }
         end
-      qq =
-        qq.select { _1[2] }
-          .sort_by { -_1[1] }
-          .map { _1[0] }
-      qq.each do |q|
-        @entrance.with_write_lock { @stash[:queries][q].keys }.each do |k|
-          next unless @stash[:queries][q][k][:stale]
-          next if @stash[:queries][q][k][:stale] > Time.now - @refill_delay
-          next if @tpool.queue_length >= @max_queue_length
-          @tpool.post do
-            h = @stash[:queries][q][k]
-            stale_before = h[:stale]
-            ret = @pool.exec(q, h[:params], h[:result])
-            @entrance.with_write_lock do
-              h = @stash[:queries][q][k]
-              h[:ret] = ret
-              h.delete(:stale) if h[:stale] == stale_before
-            end
-          end
+      end
+    end
+  end
+
+  def refiller!
+    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
+      ranked.each { |q| replenish(q) }
+    end
+  end
+
+  def ranked
+    qq =
+      @entrance.with_write_lock do
+        @stash[:queries]
+          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+      end
+    qq.select { _1[2] }.sort_by { -_1[1] }.map { _1[0] }
+  end
+
+  def replenish(query)
+    @entrance.with_write_lock { @stash[:queries][query].keys }.each do |k|
+      next unless @stash[:queries][query][k][:stale]
+      next if @stash[:queries][query][k][:stale] > Time.now - @delay
+      next if @tpool.queue_length >= @maxqueue
+      @tpool.post do
+        h = @stash[:queries][query][k]
+        mark = h[:stale]
+        ret = @pool.exec(query, h[:params], h[:result])
+        @entrance.with_write_lock do
+          h = @stash[:queries][query][k]
+          h[:ret] = ret
+          h.delete(:stale) if h[:stale] == mark
         end
       end
     end

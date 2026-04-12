@@ -9,7 +9,7 @@ lib = File.expand_path('lib', __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require_relative 'lib/pgtk/version'
 Gem::Specification.new do |s|
-  s.required_rubygems_version = Gem::Requirement.new('>= 0') if s.respond_to? :required_rubygems_version=
+  s.required_rubygems_version = Gem::Requirement.new('>= 0') if s.respond_to?(:required_rubygems_version=)
   s.required_ruby_version = '>= 3.2'
   s.name = 'pgtk'
   s.version = Pgtk::VERSION
@@ -26,17 +26,17 @@ Gem::Specification.new do |s|
   s.executables = s.files.grep(%r{^bin/}) { |f| File.basename(f) }
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
-  s.add_dependency 'backtrace', '~>0.4'
-  s.add_dependency 'concurrent-ruby', '~>1.3'
-  s.add_dependency 'donce', '~>0.0'
-  s.add_dependency 'ellipsized', '~>0.3'
-  s.add_dependency 'joined', '~>0.3'
-  s.add_dependency 'logger', '~>1.7'
-  s.add_dependency 'loog', '~>0.6'
-  s.add_dependency 'pg', '~>1.1'
-  s.add_dependency 'qbash', '~>0.4'
-  s.add_dependency 'random-port', '~>0.7'
-  s.add_dependency 'tago', '~>0.1'
-  s.add_dependency 'waitutil', '~> 0.2'
+  s.add_dependency('backtrace', '~>0.4')
+  s.add_dependency('concurrent-ruby', '~>1.3')
+  s.add_dependency('donce', '~>0.0')
+  s.add_dependency('ellipsized', '~>0.3')
+  s.add_dependency('joined', '~>0.3')
+  s.add_dependency('logger', '~>1.7')
+  s.add_dependency('loog', '~>0.6')
+  s.add_dependency('pg', '~>1.1')
+  s.add_dependency('qbash', '~>0.4')
+  s.add_dependency('random-port', '~>0.7')
+  s.add_dependency('tago', '~>0.1')
+  s.add_dependency('waitutil', '~> 0.2')
   s.metadata['rubygems_mfa_required'] = 'true'
 end

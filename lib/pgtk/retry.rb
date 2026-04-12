@@ -91,12 +91,12 @@ class Pgtk::Retry
       @pool.exec(sql, *)
     rescue PG::ConnectionBad => e
       attempt += 1
-      raise e if attempt >= @attempts
+      raise(e) if attempt >= @attempts
       retry
     rescue StandardError => e
-      raise e unless query.strip.upcase.start_with?('SELECT')
+      raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
-      raise e if attempt >= @attempts
+      raise(e) if attempt >= @attempts
       retry
     end
   end

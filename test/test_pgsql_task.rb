@@ -6,8 +6,8 @@
 require 'rake'
 require 'tmpdir'
 require 'yaml'
-require_relative 'test__helper'
 require_relative '../lib/pgtk/pgsql_task'
+require_relative 'test__helper'
 
 # Pgsql rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -23,9 +23,7 @@ class TestPgsqlTask < Pgtk::Test
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
-        t.config = {
-          log_min_error_statement: 'ERROR'
-        }
+        t.config = { log_min_error_statement: 'ERROR' }
       end
       Rake::Task['p2'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
@@ -42,12 +40,7 @@ class TestPgsqlTask < Pgtk::Test
         t.dbname = 'test'
         t.yaml = File.join(dir, 'cfg.yml')
         t.quiet = true
-        t.config = {
-          log_directory: dir,
-          logging_collector: 'on',
-          log_statement: 'all',
-          log_filename: 'pgsql.log'
-        }
+        t.config = { log_directory: dir, logging_collector: 'on', log_statement: 'all', log_filename: 'pgsql.log' }
       end
       Rake::Task['p3'].invoke
       yaml = YAML.load_file(File.join(dir, 'cfg.yml'))
@@ -72,9 +65,7 @@ class TestPgsqlTask < Pgtk::Test
         t.yaml = File.join(dir, 'config.yml')
         t.quiet = true
         t.docker = :always
-        t.config = {
-          log_min_error_statement: 'ERROR'
-        }
+        t.config = { log_min_error_statement: 'ERROR' }
       end
       Rake::Task['pgsql_docker'].invoke
       yaml = YAML.load_file(File.join(dir, 'config.yml'))

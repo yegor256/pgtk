@@ -15,8 +15,8 @@ unless SimpleCov.running || ENV['PICKS'] || ENV['GITHUB_WORKFLOW'] == 'docker'
       SimpleCov::Formatter::CoberturaFormatter
     ]
   )
-  SimpleCov.minimum_coverage 90
-  SimpleCov.minimum_coverage_by_file 85
+  SimpleCov.minimum_coverage(90)
+  SimpleCov.minimum_coverage_by_file(85)
   SimpleCov.start do
     add_filter 'test/'
     add_filter 'vendor/'
@@ -30,8 +30,8 @@ require 'minitest/autorun'
 require 'minitest/mock'
 require 'minitest/reporters'
 require 'minitest/stub_const'
-Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new(fail_fast: true)]
-Minitest.load :minitest_reporter
+Minitest::Reporters.use!([Minitest::Reporters::SpecReporter.new(fail_fast: true)])
+Minitest.load(:minitest_reporter)
 
 require 'logger'
 require 'loog'
@@ -44,7 +44,7 @@ require_relative '../lib/pgtk/pgsql_task'
 class Pgtk::Test < Minitest::Test
   def fake_config
     Dir.mktmpdir do |dir|
-      id = (Time.now.to_f * 1_000_000).to_i % 1_000_000
+      id = Integer(Time.now.strftime('%s%6N'), 10) % 1_000_000
       f = File.join(dir, 'cfg.yml')
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
         t.dir = File.join(dir, 'pgsql')
@@ -62,19 +62,15 @@ class Pgtk::Test < Minitest::Test
       end
       Rake::Task["liquibase#{id}"].invoke
       assert_path_exists(f)
-      yield f
+      yield(f)
     end
   end
 
   def fake_pool(size = 1, log: Loog::NULL)
     fake_config do |f|
-      pool = Pgtk::Pool.new(
-        Pgtk::Wire::Yaml.new(f),
-        max: size,
-        log: log
-      )
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: size, log: log)
       pool.start!
-      yield pool
+      yield(pool)
     end
   end
 end

@@ -11,11 +11,11 @@ require 'securerandom'
 require 'threads'
 require 'tmpdir'
 require 'yaml'
-require_relative 'test__helper'
 require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/spy'
+require_relative 'test__helper'
 
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -49,10 +49,7 @@ class TestPool < Pgtk::Test
     fake_pool(4) do |pool|
       Threads.new.assert do
         10.times do
-          pool.exec(
-            'INSERT INTO book (title) VALUES ($1)',
-            [SecureRandom.hex(30)]
-          )
+          pool.exec('INSERT INTO book (title) VALUES ($1)', [SecureRandom.hex(30)])
           pool.dump
           pool.exec('SELECT * FROM book')
         end
@@ -62,10 +59,7 @@ class TestPool < Pgtk::Test
 
   def test_basic
     fake_pool do |pool|
-      id = pool.exec(
-        'INSERT INTO book (title) VALUES ($1) RETURNING id',
-        ['Elegant Objects']
-      )[0]['id'].to_i
+      id = Integer(pool.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Elegant Objects'])[0]['id'], 10)
       assert_predicate(id, :positive?)
     end
   end
@@ -114,10 +108,7 @@ class TestPool < Pgtk::Test
     queries = []
     fake_pool do |pool|
       pool = Pgtk::Spy.new(pool) { |sql| queries.append(sql) }
-      pool.exec(
-        ['INSERT INTO book', '(title) VALUES ($1)'],
-        ['Elegant Objects']
-      )
+      pool.exec(['INSERT INTO book', '(title) VALUES ($1)'], ['Elegant Objects'])
     end
     assert_equal(1, queries.size)
     assert_equal('INSERT INTO book (title) VALUES ($1)', queries.first)
@@ -137,10 +128,7 @@ class TestPool < Pgtk::Test
   def test_logs_sql
     log = Loog::Buffer.new
     fake_pool(log: log) do |pool|
-      pool.exec(
-        'INSERT INTO book (title) VALUES ($1)',
-        ['Object Thinking']
-      )
+      pool.exec('INSERT INTO book (title) VALUES ($1)', ['Object Thinking'])
       assert_includes(log.to_s, 'INSERT INTO book (title) VALUES ($1)')
     end
   end
@@ -157,16 +145,11 @@ class TestPool < Pgtk::Test
 
   def test_transaction
     fake_pool do |pool|
-      id = Pgtk::Spy.new(pool).transaction do |t|
-        t.exec('DELETE FROM book')
-        t.exec(
-          [
-            'INSERT INTO book (title)',
-            'VALUES ($1) RETURNING id'
-          ],
-          ['Object Thinking']
-        )[0]['id'].to_i
-      end
+      id =
+        Pgtk::Spy.new(pool).transaction do |t|
+          t.exec('DELETE FROM book')
+          Integer(t.exec(['INSERT INTO book (title)', 'VALUES ($1) RETURNING id'], ['Object Thinking'])[0]['id'], 10)
+        end
       assert_predicate(id, :positive?)
     end
   end
@@ -189,7 +172,7 @@ class TestPool < Pgtk::Test
 
   def test_reconnects_on_pg_error
     fake_pool do |pool|
-      assert_raises PG::UndefinedTable do
+      assert_raises(PG::UndefinedTable) do
         pool.exec('SELECT * FROM thisiserror')
       end
       5.times do
@@ -202,55 +185,12 @@ class TestPool < Pgtk::Test
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
       id = rand(100..999)
-      Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
-        t.dir = File.join(dir, 'pgsql')
-        t.user = 'hello'
-        t.password = 'A B C привет ! & | !'
-        t.dbname = 'test'
-        t.yaml = File.join(dir, 'cfg.yml')
-        t.quiet = true
-        t.fresh_start = true
-        t.port = port
-      end
-      task = Rake::Task["pgsql#{id}"]
-      task.invoke
-      pool = Pgtk::Pool.new(
-        Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')),
-        max: 1,
-        log: Loog::NULL
-      )
-      cycle = 0
-      loop do
-        pool.start!
-        break
-      rescue PG::ConnectionBad
-        cycle += 1
-        sleep(0.1)
-        raise "Can't connect to postgres at port #{port}" if cycle > 50
-      end
+      task = fake_pgsql(dir, id, port)
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')), max: 1, log: Loog::NULL)
+      spin(50) { pool.start! }
       pool.exec('SELECT * FROM pg_catalog.pg_tables')
-      if File.exist?(File.join(dir, 'pgsql', 'pid'))
-        qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop")
-      elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
-        qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}")
-      end
-      cycle = 0
-      loop do
-        TCPSocket.new('localhost', port)
-        sleep(0.1)
-        cycle += 1
-        if cycle > 50
-          if File.exist?(File.join(dir, 'pid'))
-            qbash('ps -ax | grep postgres')
-          elsif File.exist?(File.join(dir, 'docker-container'))
-            qbash('docker ps -a | grep postgres')
-          end
-          raise "Can't stop running postgres at port #{port}, for some reason"
-        end
-      rescue StandardError => e
-        puts e.message
-        break
-      end
+      halt(dir)
+      drain(dir, port)
       assert_raises(PG::UnableToSend, PG::ConnectionBad) do
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
       end
@@ -260,10 +200,68 @@ class TestPool < Pgtk::Test
         pool.exec('SELECT * FROM pg_catalog.pg_tables')
         break
       rescue StandardError => e
-        puts e.message
+        puts(e.message)
         sleep(0.1)
         retry
       end
+    end
+  end
+
+  private
+
+  def fake_pgsql(dir, id, port)
+    Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
+      t.dir = File.join(dir, 'pgsql')
+      t.user = 'hello'
+      t.password = 'A B C привет ! & | !'
+      t.dbname = 'test'
+      t.yaml = File.join(dir, 'cfg.yml')
+      t.quiet = true
+      t.fresh = true
+      t.port = port
+    end
+    task = Rake::Task["pgsql#{id}"]
+    task.invoke
+    task
+  end
+
+  def spin(limit)
+    cycle = 0
+    loop do
+      yield
+      break
+    rescue PG::ConnectionBad
+      cycle += 1
+      sleep(0.1)
+      raise(IOError, "Can't connect after #{limit} attempts") if cycle > limit
+    end
+  end
+
+  def halt(dir)
+    if File.exist?(File.join(dir, 'pgsql', 'pid'))
+      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop")
+    elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
+      qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}")
+    end
+  end
+
+  def drain(dir, port)
+    cycle = 0
+    loop do
+      TCPSocket.new('localhost', port)
+      sleep(0.1)
+      cycle += 1
+      if cycle > 50
+        if File.exist?(File.join(dir, 'pid'))
+          qbash('ps -ax | grep postgres')
+        elsif File.exist?(File.join(dir, 'docker-container'))
+          qbash('docker ps -a | grep postgres')
+        end
+        raise(IOError, "Can't stop running postgres at port #{port}, for some reason")
+      end
+    rescue StandardError => e
+      puts(e.message)
+      break
     end
   end
 end

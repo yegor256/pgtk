@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
+require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'pg'
-require 'loog'
 require 'tago'
 require_relative '../pgtk'
 require_relative 'version'
@@ -130,7 +130,7 @@ class Pgtk::Pool
   def start!
     return if @started
     @max.times do
-      @pool << @wire.connection
+      @pool.push(@wire.connection)
     end
     @started = true
     @log.debug("PostgreSQL pool started with #{@max} connections")
@@ -210,12 +210,12 @@ class Pgtk::Pool
       t = Txn.new(c, @log)
       t.exec('START TRANSACTION')
       begin
-        r = yield t
+        r = yield(t)
         t.exec('COMMIT')
         r
       rescue StandardError => e
         t.exec('ROLLBACK')
-        raise e
+        raise(e)
       end
     end
   end
@@ -239,7 +239,7 @@ class Pgtk::Pool
       @condition = ConditionVariable.new
     end
 
-    def <<(item)
+    def push(item)
       @mutex.synchronize do
         if @items.size < @size
           @items << item
@@ -248,7 +248,7 @@ class Pgtk::Pool
           index = @items.index(item)
           if index.nil?
             index = @taken.index(true)
-            raise 'No taken slot found' if index.nil?
+            raise(StandardError, 'No taken slot found') if index.nil?
             @items[index] = item
           end
           @taken[index] = false
@@ -299,7 +299,7 @@ class Pgtk::Pool
           if args.empty?
             @conn.exec(sql) do |res|
               if block_given?
-                yield res
+                yield(res)
               else
                 res.each.to_a
               end
@@ -307,7 +307,7 @@ class Pgtk::Pool
           else
             @conn.exec_params(sql, args, result) do |res|
               if block_given?
-                yield res
+                yield(res)
               else
                 res.each.to_a
               end
@@ -315,7 +315,7 @@ class Pgtk::Pool
           end
       rescue StandardError => e
         @log.error("#{sql} -> #{e.message}")
-        raise e
+        raise(e)
       end
       lag = Time.now - start
       if lag < 1
@@ -332,12 +332,12 @@ class Pgtk::Pool
   def connect
     conn = @pool.pop
     begin
-      yield conn
+      yield(conn)
     rescue StandardError => e
       conn = renew(conn)
-      raise e
+      raise(e)
     ensure
-      @pool << conn
+      @pool.push(conn)
     end
   end
 

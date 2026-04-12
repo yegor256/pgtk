@@ -107,15 +107,15 @@ class Pgtk::Impatient
         @pool.exec(sql, *args)
       end
     rescue Timeout::Error => e
-      raise e unless e.message == token
-      raise TooSlow, [
+      raise(e) unless e.message == token
+      raise(TooSlow, [
         'SQL query',
         ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
         'was terminated after',
         start.ago,
         'of waiting:',
         sql.ellipsized(50).inspect
-      ].compact.join(' ')
+      ].compact.join(' '))
     end
   end
 
@@ -125,8 +125,8 @@ class Pgtk::Impatient
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      t.exec("SET LOCAL statement_timeout = #{(@timeout * 1000).to_i}")
-      yield Pgtk::Impatient.new(t, @timeout)
+      t.exec("SET LOCAL statement_timeout = #{Integer((@timeout * 1000).to_s, 10)}")
+      yield(Pgtk::Impatient.new(t, @timeout))
     end
   end
 end

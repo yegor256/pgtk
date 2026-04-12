@@ -8,5 +8,4 @@
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 module Pgtk
-  # Nothing here.
 end

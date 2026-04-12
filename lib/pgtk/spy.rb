@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
+require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'pg'
-require 'loog'
 require_relative '../pgtk'
 require_relative 'wire'
 
@@ -94,7 +94,7 @@ class Pgtk::Spy
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      yield Pgtk::Spy.new(t, &@block)
+      yield(Pgtk::Spy.new(t, &@block))
     end
   end
 end

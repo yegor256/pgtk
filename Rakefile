@@ -5,9 +5,9 @@
 
 require 'os'
 require 'qbash'
-require 'rubygems'
 require 'rake'
 require 'rake/clean'
+require 'rubygems'
 
 def name
   @name ||= File.basename(Dir['*.gemspec'].first, '.*')
@@ -53,7 +53,7 @@ end
 
 require 'xcop/rake_task'
 desc 'Validate all XML/XSL/XSD/HTML files for formatting'
-Xcop::RakeTask.new :xcop do |task|
+Xcop::RakeTask.new(:xcop) do |task|
   task.includes = ['**/*.xml', '**/*.xsl', '**/*.xsd', '**/*.html']
   task.excludes = ['target/**/*', 'coverage/**/*', 'vendor/**/*', 'doc/**/*']
 end

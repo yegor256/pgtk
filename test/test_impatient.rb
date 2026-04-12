@@ -9,9 +9,9 @@ require 'qbash'
 require 'rake'
 require 'tmpdir'
 require 'yaml'
-require_relative 'test__helper'
-require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/impatient'
+require_relative '../lib/pgtk/pool'
+require_relative 'test__helper'
 
 # Pool test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -35,12 +35,7 @@ class TestImpatient < Pgtk::Test
   def test_interrupts
     fake_pool do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do
-        Pgtk::Impatient.new(pool, 0.01).exec(
-          [
-            'SELECT COUNT(*)',
-            'FROM generate_series(1, 1000000) AS a'
-          ]
-        )
+        Pgtk::Impatient.new(pool, 0.01).exec(['SELECT COUNT(*)', 'FROM generate_series(1, 1000000) AS a'])
       end
     end
   end
@@ -60,9 +55,7 @@ class TestImpatient < Pgtk::Test
     fake_pool do |pool|
       assert_raises(Timeout::Error) do
         Timeout.timeout(0.1) do
-          Pgtk::Impatient.new(pool, 999).exec(
-            'SELECT COUNT(*) FROM generate_series(1, 100000000) AS a'
-          )
+          Pgtk::Impatient.new(pool, 999).exec('SELECT COUNT(*) FROM generate_series(1, 100000000) AS a')
         end
       end
     end
@@ -70,10 +63,10 @@ class TestImpatient < Pgtk::Test
 
   def test_doesnt_interrupt
     fake_pool do |pool|
-      id = Pgtk::Impatient.new(pool, 1).exec(
+      id = Integer(Pgtk::Impatient.new(pool, 1).exec(
         'INSERT INTO book (title) VALUES ($1) RETURNING id',
         ['1984']
-      ).first['id'].to_i
+      ).first['id'], 10)
       assert_predicate(id, :positive?)
     end
   end
@@ -81,10 +74,7 @@ class TestImpatient < Pgtk::Test
   def test_doesnt_interrupt_in_transaction
     fake_pool do |pool|
       Pgtk::Impatient.new(pool, 1).transaction do |t|
-        id = t.exec(
-          'INSERT INTO book (title) VALUES ($1) RETURNING id',
-          ['1984']
-        ).first['id'].to_i
+        id = Integer(t.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['1984']).first['id'], 10)
         assert_predicate(id, :positive?)
       end
     end

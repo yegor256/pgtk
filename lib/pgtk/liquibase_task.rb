@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
+require 'English'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'donce'
-require 'English'
 require 'loog'
 require 'os'
 require 'qbash'
@@ -19,41 +19,7 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::LiquibaseTask < Rake::TaskLib
-  # Task name
-  # @return [Symbol]
-  attr_accessor :name
-
-  # Path to Liquibase master XML file
-  # @return [String]
-  attr_accessor :master
-
-  # Path to YAML file with PostgreSQL connection details
-  # @return [String, Array<String>]
-  attr_accessor :yaml
-
-  # Path to PG entire SQL schema file, which will be dumped and overwritten after all migrations
-  # @return [String]
-  attr_accessor :schema
-
-  # Whether to suppress output
-  # @return [Boolean]
-  attr_accessor :quiet
-
-  # Liquibase version to use
-  # @return [String]
-  attr_accessor :liquibase_version
-
-  # PostgreSQL JDBC driver version to use
-  # @return [String]
-  attr_accessor :postgresql_version
-
-  # Liquibase contexts to apply
-  # @return [String]
-  attr_accessor :contexts
-
-  # Use docker (set to either :never, :always, or :maybe)
-  # @return [Symbol]
-  attr_accessor :docker
+  attr_accessor :name, :master, :yaml, :schema, :quiet, :liquibase, :postgresql, :contexts, :docker
 
   # Initialize a new Liquibase task.
   #
@@ -65,11 +31,11 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     @name = args.shift || :liquibase
     @quiet = false
     @contexts = ''
-    @liquibase_version = '3.2.2'
-    @postgresql_version = '42.7.0'
-    desc 'Deploy Liquibase changes to the running PostgreSQL server' unless ::Rake.application.last_description
+    @liquibase = '3.2.2'
+    @postgresql = '42.7.0'
+    desc('Deploy Liquibase changes to the running PostgreSQL server') unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
-      RakeFileUtils.send(:verbose, true) do
+      RakeFileUtils.verbose(true) do
         yield(*[self, task_args].slice(0, task_block.arity)) if block_given?
         run
       end
@@ -79,34 +45,48 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   private
 
   def run
-    raise "Option 'master' is mandatory" unless @master
-    raise "Option 'yaml' is mandatory" unless @yaml
-    yml = @yaml
-    unless yml.is_a?(Hash)
-      yml = YAML.load_file(
-        if @yaml.is_a?(Array)
-          @yaml.drop_while { |f| !File.exist?(f) }.first
-        else
-          @yaml
-        end
-      )
-    end
-    raise "YAML configuration is missing the 'pgsql' section" unless yml['pgsql']
+    raise(ArgumentError, "Option 'master' is mandatory") unless @master
+    raise(ArgumentError, "Option 'yaml' is mandatory") unless @yaml
+    yml = config
     @master = File.expand_path(@master)
+    validate(yml)
+    migrate(yml)
+    dump(yml) if @schema
+  end
+
+  def config
+    yml = @yaml
+    return yml if yml.is_a?(Hash)
+    YAML.load_file(
+      if @yaml.is_a?(Array)
+        @yaml.drop_while { |f| !File.exist?(f) }.first
+      else
+        @yaml
+      end
+    )
+  end
+
+  def validate(yml)
+    raise(ArgumentError, "YAML configuration is missing the 'pgsql' section") unless yml['pgsql']
     unless File.exist?(@master)
-      raise \
+      raise(
+        ArgumentError,
         "Liquibase master is absent at '#{@master}'. " \
         'More about this file you can find in Liquibase documentation: ' \
         'https://docs.liquibase.com/concepts/changelogs/xml-format.html'
+      )
     end
+    raise(ArgumentError, "The 'url' is not set in the config (YAML)") if yml['pgsql']['url'].nil?
+    raise(ArgumentError, "The 'user' is not set in the config (YAML)") if yml['pgsql']['user'].nil?
+    raise(ArgumentError, "The 'password' is not set in the config (YAML)") if yml['pgsql']['password'].nil?
+  end
+
+  def migrate(yml)
     pom = File.expand_path(File.join(__dir__, '../../resources/pom.xml'))
-    old = @liquibase_version.match?(/^[1-3]\..+$/)
+    old = @liquibase.match?(/^[1-3]\..+$/)
     url = yml['pgsql']['url']
-    raise "The 'url' is not set in the config (YAML)" if url.nil?
     username = yml['pgsql']['user']
-    raise "The 'user' is not set in the config (YAML)" if username.nil?
     password = yml['pgsql']['password']
-    raise "The 'password' is not set in the config (YAML)" if password.nil?
     Dir.chdir(File.dirname(@master)) do
       qbash(
         'mvn', 'verify',
@@ -117,9 +97,9 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
         '--file',
         Shellwords.escape(pom),
         '--define',
-        "liquibase.version=#{@liquibase_version}",
+        "liquibase.version=#{@liquibase}",
         '--define',
-        "postgresql.version=#{@postgresql_version}",
+        "postgresql.version=#{@postgresql}",
         '--define',
         Shellwords.escape("liquibase.searchPath=#{File.dirname(@master)}"),
         '--define',
@@ -136,49 +116,59 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
         stderr: Loog::REGULAR
       )
     end
-    return unless @schema
+  end
+
+  def dump(yml)
     @schema = File.expand_path(@schema)
-    dump = qbash('pg_dump -V', accept: nil, both: true)
-    local = dump[1].zero?
+    local = qbash('pg_dump -V', accept: nil, both: true)[1].zero?
     docker = qbash('docker -v', accept: nil, both: true)[1].zero?
-    raise 'Cannot generate schema, install either pg_dump or Docker' unless local || docker
-    raise 'You set docker to :always, but Docker is not installed' if @docker == :always && !docker
+    raise(IOError, 'Cannot generate schema, install either pg_dump or Docker') unless local || docker
+    raise(ArgumentError, 'You set docker to :always, but Docker is not installed') if @docker == :always && !docker
+    password = yml['pgsql']['password']
     host = yml.dig('pgsql', 'host')
     Dir.chdir(File.dirname(@schema)) do
       out =
         if (local && @docker != :always) || @docker == :never
-          qbash(
-            'pg_dump',
-            '-h', Shellwords.escape(host),
-            '-p', Shellwords.escape(yml.dig('pgsql', 'port').to_s),
-            '-U', Shellwords.escape(yml.dig('pgsql', 'user')),
-            '-d', Shellwords.escape(yml.dig('pgsql', 'dbname')),
-            '-n', 'public',
-            '--schema-only',
-            env: { 'PGPASSWORD' => password },
-            stdout: @quiet ? Loog::NULL : Loog::REGULAR,
-            stderr: Loog::REGULAR
-          )
+          pgdump(yml, host, password)
         else
           host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)
-          donce(
-            image: 'postgres:18.1',
-            args: OS.mac? ? '' : '--network=host',
-            env: { 'PGPASSWORD' => password },
-            command: [
-              'pg_dump',
-              '-h', host,
-              '-p', yml.dig('pgsql', 'port').to_s,
-              '-U', yml.dig('pgsql', 'user'),
-              '-d', yml.dig('pgsql', 'dbname'),
-              '-n', 'public',
-              '--schema-only'
-            ].shelljoin,
-            stdout: @quiet ? Loog::NULL : Loog::REGULAR,
-            stderr: Loog::REGULAR
-          )
+          dockerdump(yml, host, password)
         end
       File.write(@schema, out)
     end
+  end
+
+  def pgdump(yml, host, password)
+    qbash(
+      'pg_dump',
+      '-h', Shellwords.escape(host),
+      '-p', Shellwords.escape(yml.dig('pgsql', 'port').to_s),
+      '-U', Shellwords.escape(yml.dig('pgsql', 'user')),
+      '-d', Shellwords.escape(yml.dig('pgsql', 'dbname')),
+      '-n', 'public',
+      '--schema-only',
+      env: { 'PGPASSWORD' => password },
+      stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+      stderr: Loog::REGULAR
+    )
+  end
+
+  def dockerdump(yml, host, password)
+    donce(
+      image: 'postgres:18.1',
+      args: OS.mac? ? '' : '--network=host',
+      env: { 'PGPASSWORD' => password },
+      command: [
+        'pg_dump',
+        '-h', host,
+        '-p', yml.dig('pgsql', 'port').to_s,
+        '-U', yml.dig('pgsql', 'user'),
+        '-d', yml.dig('pgsql', 'dbname'),
+        '-n', 'public',
+        '--schema-only'
+      ].shelljoin,
+      stdout: @quiet ? Loog::NULL : Loog::REGULAR,
+      stderr: Loog::REGULAR
+    )
   end
 end

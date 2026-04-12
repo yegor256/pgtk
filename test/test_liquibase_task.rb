@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
+require 'rake'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'tmpdir'
-require 'rake'
 require 'yaml'
-require_relative 'test__helper'
-require_relative '../lib/pgtk/pgsql_task'
 require_relative '../lib/pgtk/liquibase_task'
+require_relative '../lib/pgtk/pgsql_task'
+require_relative 'test__helper'
 
 # Liquibase rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -30,8 +30,8 @@ class TestLiquibaseTask < Pgtk::Test
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = ['file-is-absent', File.join(dir, 'cfg.yml'), 'another']
         t.quiet = true
-        t.postgresql_version = '42.7.0'
-        t.liquibase_version = '3.2.2'
+        t.postgresql = '42.7.0'
+        t.liquibase = '3.2.2'
         t.contexts = '!test'
       end
       Rake::Task['liquibase2'].invoke
@@ -52,8 +52,8 @@ class TestLiquibaseTask < Pgtk::Test
       Pgtk::LiquibaseTask.new(:liquibase) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'xxx.yml')
-        t.postgresql_version = '42.7.1'
-        t.liquibase_version = '4.25.1'
+        t.postgresql = '42.7.1'
+        t.liquibase = '4.25.1'
         t.quiet = true
       end
       Rake::Task['liquibase'].invoke
@@ -66,9 +66,10 @@ class TestLiquibaseTask < Pgtk::Test
       t.yaml = { 'pgsql' => {} }
       t.quiet = true
     end
-    ex = assert_raises(StandardError) do
-      Rake::Task['lb'].invoke
-    end
+    ex =
+      assert_raises(StandardError) do
+        Rake::Task['lb'].invoke
+      end
     assert_includes(ex.message, 'the-file-doesnt-exist.xml')
   end
 

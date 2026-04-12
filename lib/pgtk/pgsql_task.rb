@@ -1,19 +1,19 @@
 # frozen_string_literal: true
 
+require 'English'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'cgi'
-require 'English'
 require 'qbash'
 require 'rake'
 require 'rake/tasklib'
 require 'random-port'
-require 'shellwords'
 require 'securerandom'
+require 'shellwords'
 require 'tempfile'
-require 'yaml'
 require 'waitutil'
+require 'yaml'
 require_relative '../pgtk'
 
 # Pgsql rake task.
@@ -21,49 +21,7 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::PgsqlTask < Rake::TaskLib
-  # Task name
-  # @return [Symbol]
-  attr_accessor :name
-
-  # Directory where PostgreSQL server files will be stored
-  # @return [String]
-  attr_accessor :dir
-
-  # Whether to delete the PostgreSQL data directory on each run
-  # @return [Boolean]
-  attr_accessor :fresh_start
-
-  # PostgreSQL username
-  # @return [String]
-  attr_accessor :user
-
-  # PostgreSQL password
-  # @return [String]
-  attr_accessor :password
-
-  # PostgreSQL database name
-  # @return [String]
-  attr_accessor :dbname
-
-  # Path to YAML file where configuration will be written
-  # @return [String]
-  attr_accessor :yaml
-
-  # Whether to suppress output
-  # @return [Boolean]
-  attr_accessor :quiet
-
-  # TCP port for PostgreSQL server (random if nil)
-  # @return [Integer, nil]
-  attr_accessor :port
-
-  # Configuration options for PostgreSQL server
-  # @return [Hash]
-  attr_accessor :config
-
-  # Use docker (set to either :never, :always, or :maybe)
-  # @return [Symbol]
-  attr_accessor :docker
+  attr_accessor :name, :dir, :fresh, :user, :password, :dbname, :yaml, :quiet, :port, :config, :docker
 
   # Initialize a new PostgreSQL server task.
   #
@@ -73,16 +31,16 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     super()
     @docker ||= :maybe
     @name = args.shift || :pgsql
-    @fresh_start = false
+    @fresh = false
     @quiet = false
     @user = 'test'
     @config = {}
     @password = 'test'
     @dbname = 'test'
     @port = nil
-    desc 'Start a local PostgreSQL server' unless ::Rake.application.last_description
+    desc('Start a local PostgreSQL server') unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
-      RakeFileUtils.send(:verbose, true) do
+      RakeFileUtils.verbose(true) do
         yield(*[self, task_args].slice(0, task_block.arity)) if block_given?
         run
       end
@@ -92,35 +50,52 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   private
 
   def run
-    pg_out = qbash('postgres -V; initdb -V', accept: nil, both: true)
-    local = pg_out[1].zero?
-    docker_out = qbash('docker -v', accept: nil, both: true)
-    docker = docker_out[1].zero?
-    unless local || docker
-      raise \
-        "Failed to find either PostgreSQL or Docker:\n#{pg_out.first}\n#{docker_out.first}"
-    end
-    raise 'You cannot force Docker to run, because it is not installed locally' if @docker == :always && !docker
-    raise "Option 'dir' is mandatory" unless @dir
-    raise "Option 'yaml' is mandatory" unless @yaml
+    local = detect(:local)
+    docker = detect(:docker)
+    preflight(local, docker)
     home = File.expand_path(@dir)
-    FileUtils.rm_rf(home) if @fresh_start
-    raise "Directory/file #{home} is present, use fresh_start=true" if File.exist?(home)
+    FileUtils.rm_rf(home) if @fresh
+    raise(ArgumentError, "Directory/file #{home} is present, use fresh=true") if File.exist?(home)
     stdout = @quiet ? nil : $stdout
+    port = acquire
+    place = launch(local, home, stdout, port)
+    save(port)
+    return if @quiet
+    puts("PostgreSQL has been started #{place}, port #{port}")
+    puts("YAML config saved to #{@yaml}")
+  end
+
+  def preflight(local, docker)
+    raise(IOError, 'Failed to find either PostgreSQL or Docker') unless local || docker
+    if @docker == :always && !docker
+      raise(ArgumentError, 'You cannot force Docker to run, because it is not installed locally')
+    end
+    raise(ArgumentError, "Option 'dir' is mandatory") unless @dir
+    raise(ArgumentError, "Option 'yaml' is mandatory") unless @yaml
+  end
+
+  def acquire
     port = @port
     if port.nil?
       port = RandomPort::Pool::SINGLETON.acquire
-      puts "Random TCP port #{port} is used for PostgreSQL server" unless @quiet
+      puts("Random TCP port #{port} is used for PostgreSQL server") unless @quiet
     else
-      puts "Required TCP port #{port} is used for PostgreSQL server" unless @quiet
+      puts("Required TCP port #{port} is used for PostgreSQL server") unless @quiet
     end
+    port
+  end
+
+  def launch(local, home, stdout, port)
     if (local && @docker != :always) || @docker == :never
-      pid = run_local(home, stdout, port)
-      place = "in process ##{pid}"
+      pid = localize(home, stdout, port)
+      "in process ##{pid}"
     else
-      container = run_docker(home, stdout, port)
-      place = "in container #{container}"
+      container = dockerize(home, stdout, port)
+      "in container #{container}"
     end
+  end
+
+  def save(port)
     File.write(
       @yaml,
       {
@@ -130,19 +105,22 @@ class Pgtk::PgsqlTask < Rake::TaskLib
           'dbname' => @dbname,
           'user' => @user,
           'password' => @password,
-          'url' => [
-            "jdbc:postgresql://localhost:#{port}/",
-            "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}"
-          ].join
+          'url' => ["jdbc:postgresql://localhost:#{port}/", "#{CGI.escape(@dbname)}?user=#{CGI.escape(@user)}"].join
         }
       }.to_yaml
     )
-    return if @quiet
-    puts "PostgreSQL has been started #{place}, port #{port}"
-    puts "YAML config saved to #{@yaml}"
   end
 
-  def run_docker(home, stdout, port)
+  def detect(what)
+    case what
+    when :local
+      qbash('postgres -V; initdb -V', accept: nil, both: true)[1].zero?
+    when :docker
+      qbash('docker -v', accept: nil, both: true)[1].zero?
+    end
+  end
+
+  def dockerize(home, stdout, port)
     FileUtils.mkdir_p(home)
     out =
       qbash(
@@ -166,18 +144,18 @@ class Pgtk::PgsqlTask < Rake::TaskLib
         both: true, accept: nil
       )[1].zero?
         qbash("docker stop #{Shellwords.escape(container)}")
-        puts "PostgreSQL docker container #{container.inspect} was stopped" unless @quiet
+        puts("PostgreSQL docker container #{container.inspect} was stopped") unless @quiet
       end
     end
     begin
       WaitUtil.wait_for_service('PG in Docker', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
     rescue WaitUtil::TimeoutError => e
-      raise "Failed to start PostgreSQL Docker container #{container.inspect}: #{e.message}"
+      raise(IOError, "Failed to start PostgreSQL Docker container #{container.inspect}: #{e.message}")
     end
     container
   end
 
-  def run_local(home, stdout, port)
+  def localize(home, stdout, port)
     Tempfile.open do |pwfile|
       File.write(pwfile.path, @password)
       qbash(
@@ -200,23 +178,19 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
       "--port=#{port}"
     ].join(' ')
-    pid = Process.spawn(
-      cmd,
-      $stdout => File.join(home, 'stdout.txt'),
-      $stderr => File.join(home, 'stderr.txt')
-    )
+    pid = Process.spawn(cmd, $stdout => File.join(home, 'stdout.txt'), $stderr => File.join(home, 'stderr.txt'))
     File.write(File.join(@dir, 'pid'), pid)
     at_exit do
       qbash("kill -TERM #{Shellwords.escape(pid)}", stdout:)
-      puts "PostgreSQL killed in PID #{pid}" unless @quiet
+      puts("PostgreSQL killed in PID #{pid}") unless @quiet
     end
     begin
       WaitUtil.wait_for_service('PG in local', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
     rescue WaitUtil::TimeoutError => e
-      puts "+ #{cmd}"
-      puts "stdout:\n#{File.read(File.join(home, 'stdout.txt'))}"
-      puts "stderr:\n#{File.read(File.join(home, 'stderr.txt'))}"
-      raise "Failed to start PostgreSQL database server on port #{port}: #{e.message}"
+      puts("+ #{cmd}")
+      puts("stdout:\n#{File.read(File.join(home, 'stdout.txt'))}")
+      puts("stderr:\n#{File.read(File.join(home, 'stderr.txt'))}")
+      raise(IOError, "Failed to start PostgreSQL database server on port #{port}: #{e.message}")
     end
     qbash(
       'createdb',

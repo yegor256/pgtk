@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
+require 'nokogiri'
+require 'qbash'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'tmpdir'
-require 'nokogiri'
-require 'qbash'
-require_relative 'test__helper'
 require_relative '../lib/pgtk/liquicheck_task'
+require_relative 'test__helper'
 
 # Liquicheck rake task test.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
@@ -16,48 +16,7 @@ require_relative '../lib/pgtk/liquicheck_task'
 class TestLiquicheckTask < Pgtk::Test
   def test_simple
     Dir.mktmpdir do |dir|
-      File.write(
-        File.join(dir, '001-some-migration.xml'),
-        migration(
-          logical_file_path: '001-some-migration.xml',
-          id: '001',
-          author: 'yegor256'
-        )
-      )
-      File.write(
-        File.join(dir, '002-some-migration.xml'),
-        migration(
-          logical_file_path: '002-some-migration.xml',
-          id: '',
-          author: 'user'
-        )
-      )
-      File.write(
-        File.join(dir, '003-migration.xml'),
-        migration(
-          logical_file_path: '003-some-migration.xml',
-          id: '123',
-          author: '*'
-        )
-      )
-      File.write(
-        File.join(dir, '004-some-migration.xml'),
-        migration(
-          logical_file_path: '004-migration.xml',
-          id: '400',
-          author: '*',
-          context: 'test'
-        )
-      )
-      File.write(
-        File.join(dir, '005-some-migration.xml'),
-        migration(
-          logical_file_path: '005-migration.xml',
-          id: '006-test',
-          author: 'user',
-          context: 'test'
-        )
-      )
+      populate(dir, simple)
       Pgtk::LiquicheckTask.new(:liquicheck) do |t|
         t.dir = '.'
         t.pattern = '*.xml'
@@ -77,7 +36,6 @@ class TestLiquicheckTask < Pgtk::Test
       File.join(File.expand_path(__dir__), '..', 'lib', 'pgtk', 'liquicheck_task').then do |r|
         File.write(File.join(dir, 'Rakefile'), <<~RUBY)
           require '#{r}'
-
           Pgtk::LiquicheckTask.new
         RUBY
       end
@@ -88,31 +46,7 @@ class TestLiquicheckTask < Pgtk::Test
   def test_without_errors
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, 'Rakefile'), rakefile)
-      File.write(
-        File.join(dir, '001-some-migration.xml'),
-        migration(
-          logical_file_path: '001-some-migration.xml',
-          id: '001',
-          author: 'yegor256'
-        )
-      )
-      File.write(
-        File.join(dir, '002-other-migration.xml'),
-        migration(
-          logical_file_path: '002-other-migration.xml',
-          id: '002',
-          author: 'yegor256'
-        )
-      )
-      File.write(
-        File.join(dir, '003-some-migration.xml'),
-        migration(
-          logical_file_path: '003-some-migration.xml',
-          id: '003-test',
-          author: 'yegor256',
-          context: 'test'
-        )
-      )
+      populate(dir, clean)
       assert_empty(qbash("cd #{Shellwords.escape(dir)} && bundle exec rake liquicheck"))
     end
   end
@@ -120,57 +54,7 @@ class TestLiquicheckTask < Pgtk::Test
   def test_with_empty_attributes
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, 'Rakefile'), rakefile)
-      File.write(
-        File.join(dir, '001-some-migration.xml'),
-        migration(
-          logical_file_path: '',
-          id: '001',
-          author: 'user'
-        )
-      )
-      File.write(
-        File.join(dir, '002-some-migration.xml'),
-        migration(
-          logical_file_path: '002-some-migration.xml',
-          id: '',
-          author: 'user'
-        )
-      )
-      File.write(
-        File.join(dir, '003-some-migration.xml'),
-        migration(
-          logical_file_path: '003-some-migration.xml',
-          id: '003',
-          author: ''
-        )
-      )
-      File.write(
-        File.join(dir, '004-some-migration.xml'),
-        migration(
-          logical_file_path: '',
-          id: '004-test',
-          author: 'user',
-          context: 'test'
-        )
-      )
-      File.write(
-        File.join(dir, '005-some-migration.xml'),
-        migration(
-          logical_file_path: '005-some-migration.xml',
-          id: '',
-          author: 'user',
-          context: 'test'
-        )
-      )
-      File.write(
-        File.join(dir, '006-some-migration.xml'),
-        migration(
-          logical_file_path: '006-some-migration.xml',
-          id: '006-test',
-          author: '',
-          context: 'test'
-        )
-      )
+      populate(dir, empties)
       out, e = qbash("cd #{Shellwords.escape(dir)} && bundle exec rake liquicheck", accept: nil, both: true)
       refute_empty(out)
       assert_equal(1, e)
@@ -186,56 +70,7 @@ class TestLiquicheckTask < Pgtk::Test
   def test_with_incorrect_attributes
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, 'Rakefile'), rakefile)
-      File.write(
-        File.join(dir, '001-some-migration.xml'),
-        migration(
-          logical_file_path: '001-some-migration.xml',
-          id: '001',
-          author: '!*'
-        )
-      )
-      File.write(
-        File.join(dir, '002-some-migration.xml'),
-        migration(
-          logical_file_path: '002-some-migration.xml',
-          id: '002-test',
-          author: '#@',
-          context: 'test'
-        )
-      )
-      File.write(
-        File.join(dir, '003-some-migration.xml'),
-        migration(
-          logical_file_path: '003-some-migration.xml',
-          id: '00',
-          author: 'user'
-        )
-      )
-      File.write(
-        File.join(dir, '004-some-migration.xml'),
-        migration(
-          logical_file_path: '004-some-migration.xml',
-          id: '00-test',
-          author: 'user'
-        )
-      )
-      File.write(
-        File.join(dir, '005-some-migration.xml'),
-        migration(
-          logical_file_path: '005-some-migration.xml',
-          id: '005',
-          author: 'user',
-          context: 'test'
-        )
-      )
-      File.write(
-        File.join(dir, '006-some-migration.xml'),
-        migration(
-          logical_file_path: '006-other-migration.xml',
-          id: '006',
-          author: 'user'
-        )
-      )
+      populate(dir, incorrect)
       out, e = qbash("cd #{Shellwords.escape(dir)} && bundle exec rake liquicheck", accept: nil, both: true)
       refute_empty(out)
       assert_equal(1, e)
@@ -260,11 +95,68 @@ class TestLiquicheckTask < Pgtk::Test
 
   private
 
+  def populate(dir, specs)
+    specs.each do |name, opts|
+      File.write(File.join(dir, name), migration(**opts))
+    end
+  end
+
+  def simple
+    {
+      '001-some-migration.xml' => { logical_file_path: '001-some-migration.xml', id: '001', author: 'yegor256' },
+      '002-some-migration.xml' => { logical_file_path: '002-some-migration.xml', id: '', author: 'user' },
+      '003-migration.xml' => { logical_file_path: '003-some-migration.xml', id: '123', author: '*' },
+      '004-some-migration.xml' => { logical_file_path: '004-migration.xml', id: '400', author: '*', context: 'test' },
+      '005-some-migration.xml' => {
+        logical_file_path: '005-migration.xml', id: '006-test', author: 'user', context: 'test'
+      }
+    }
+  end
+
+  def clean
+    {
+      '001-some-migration.xml' => { logical_file_path: '001-some-migration.xml', id: '001', author: 'yegor256' },
+      '002-other-migration.xml' => { logical_file_path: '002-other-migration.xml', id: '002', author: 'yegor256' },
+      '003-some-migration.xml' => {
+        logical_file_path: '003-some-migration.xml', id: '003-test', author: 'yegor256', context: 'test'
+      }
+    }
+  end
+
+  def empties
+    {
+      '001-some-migration.xml' => { logical_file_path: '', id: '001', author: 'user' },
+      '002-some-migration.xml' => { logical_file_path: '002-some-migration.xml', id: '', author: 'user' },
+      '003-some-migration.xml' => { logical_file_path: '003-some-migration.xml', id: '003', author: '' },
+      '004-some-migration.xml' => { logical_file_path: '', id: '004-test', author: 'user', context: 'test' },
+      '005-some-migration.xml' => {
+        logical_file_path: '005-some-migration.xml', id: '', author: 'user', context: 'test'
+      },
+      '006-some-migration.xml' => {
+        logical_file_path: '006-some-migration.xml', id: '006-test', author: '', context: 'test'
+      }
+    }
+  end
+
+  def incorrect
+    {
+      '001-some-migration.xml' => { logical_file_path: '001-some-migration.xml', id: '001', author: '!*' },
+      '002-some-migration.xml' => {
+        logical_file_path: '002-some-migration.xml', id: '002-test', author: '#@', context: 'test'
+      },
+      '003-some-migration.xml' => { logical_file_path: '003-some-migration.xml', id: '00', author: 'user' },
+      '004-some-migration.xml' => { logical_file_path: '004-some-migration.xml', id: '00-test', author: 'user' },
+      '005-some-migration.xml' => {
+        logical_file_path: '005-some-migration.xml', id: '005', author: 'user', context: 'test'
+      },
+      '006-some-migration.xml' => { logical_file_path: '006-other-migration.xml', id: '006', author: 'user' }
+    }
+  end
+
   def rakefile
     File.join(File.expand_path(__dir__), '..', 'lib', 'pgtk', 'liquicheck_task').then do |r|
       <<~RUBY
         require '#{r}'
-
         Pgtk::LiquicheckTask.new do |t|
           t.dir = '.'
           t.pattern = '*.xml'
