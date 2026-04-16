@@ -133,7 +133,7 @@ GEM
       nokogiri (~> 1.10)
       rainbow (~> 3.0)
       slop (~> 4.4)
-    yard (0.9.40)
+    yard (0.9.41)
 
 PLATFORMS
   arm64-darwin-22
