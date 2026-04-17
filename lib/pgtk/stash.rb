@@ -338,8 +338,10 @@ class Pgtk::Stash
         ret = @pool.exec(query, h[:params], h[:result])
         @entrance.with_write_lock do
           h = @stash[:queries][query][k]
-          h[:ret] = ret
-          h.delete(:stale) if h[:stale] == mark
+          if h[:stale] == mark
+            h[:ret] = ret
+            h.delete(:stale)
+          end
         end
       end
     end

@@ -315,6 +315,37 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_refill_does_not_overwrite_fresh_cache_with_stale_snapshot
+    fake_pool do |real_pool|
+      gate = Concurrent::Event.new
+      release = Concurrent::Event.new
+      armed = Concurrent::AtomicBoolean.new(false)
+      hooked = HookedPool.new(real_pool, lambda do |q|
+        next unless armed.value && q.include?('SELECT title FROM book')
+        armed.make_false
+        gate.set
+        release.wait(10)
+      end)
+      stash = Pgtk::Stash.new(hooked, refill: nil, capping: nil, retirement: nil, delay: 0)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      stash.exec('SELECT title FROM book')
+      stash.exec('DELETE FROM book WHERE title = $1', ['A'])
+      armed.make_true
+      stash.send(:replenish, 'SELECT title FROM book')
+      raise(Timeout::Error, 'hook gate never reached') unless gate.wait(10)
+      stash.exec('SELECT title FROM book')
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+      stash.exec('SELECT title FROM book')
+      release.set
+      tpool = stash.instance_variable_get(:@tpool)
+      tpool.shutdown
+      tpool.wait_for_termination(10)
+      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
+      assert_includes(titles, 'B', 'refill task clobbered fresh cache with its stale snapshot')
+    end
+  end
+
   def test_capture_entrance_in_stash_iterators_with_multithreading
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, threads: 1, refill: 1)
