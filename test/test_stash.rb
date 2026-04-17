@@ -332,7 +332,7 @@ class TestStash < Pgtk::Test
       stash.exec('SELECT title FROM book')
       stash.exec('DELETE FROM book WHERE title = $1', ['A'])
       armed.make_true
-      stash.send(:replenish, 'SELECT title FROM book')
+      stash.__send__(:replenish, 'SELECT title FROM book')
       raise(Timeout::Error, 'hook gate never reached') unless gate.wait(10)
       stash.exec('SELECT title FROM book')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
