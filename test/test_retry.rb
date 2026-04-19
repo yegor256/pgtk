@@ -9,6 +9,7 @@ require 'qbash'
 require 'rake'
 require 'tmpdir'
 require 'yaml'
+require_relative '../lib/pgtk/impatient'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/retry'
 require_relative 'test__helper'
@@ -289,6 +290,60 @@ class TestRetry < Pgtk::Test
       retrier = Pgtk::Retry.new(stub, attempts: 3)
       retrier.exec('DELETE FROM book WHERE title = $1', ['Delete Test'])
       assert_equal(2, counter, 'delete must be retried on PG::ConnectionBad')
+    end
+  end
+
+  def test_retries_select_on_too_slow
+    fake_pool do |pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |sql, *args|
+        counter += 1
+        raise(Pgtk::Impatient::TooSlow, 'query terminated') if counter < 2
+        pool.exec(sql, *args)
+      end
+      retrier = Pgtk::Retry.new(stub, attempts: 3)
+      retrier.exec('SELECT 7 as value')
+      assert_equal(2, counter, 'select must be retried on Impatient::TooSlow')
+    end
+  end
+
+  def test_retries_insert_on_too_slow
+    fake_pool do |pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |sql, *args|
+        counter += 1
+        raise(Pgtk::Impatient::TooSlow, 'query terminated') if counter < 3
+        pool.exec(sql, *args)
+      end
+      retrier = Pgtk::Retry.new(stub, attempts: 3)
+      retrier.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Slow Test'])
+      assert_equal(3, counter, 'insert must be retried on Impatient::TooSlow')
+    end
+  end
+
+  def test_fails_after_max_too_slow_attempts
+    fake_pool do |_pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |_sql, *_args|
+        counter += 1
+        raise(Pgtk::Impatient::TooSlow, 'persistent slowness')
+      end
+      retrier = Pgtk::Retry.new(stub, attempts: 2)
+      assert_raises(Pgtk::Impatient::TooSlow) do
+        retrier.exec('UPDATE book SET title = $1 WHERE id = $2', ['X', 1])
+      end
     end
   end
 

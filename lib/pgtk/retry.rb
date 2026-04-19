@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../pgtk'
+require_relative 'impatient'
 
 # Retry is a decorator for Pool that automatically retries failed SELECT queries.
 # It provides fault tolerance for transient database errors by retrying read-only
@@ -79,8 +80,9 @@ class Pgtk::Retry
   end
 
   # Execute a SQL query with automatic retry for SELECT queries.
-  # Also retries PG::ConnectionBad errors for all query types, since
-  # connection errors indicate the query never reached PostgreSQL.
+  # Also retries PG::ConnectionBad and Pgtk::Impatient::TooSlow errors
+  # for all query types, since they indicate the query never completed
+  # against PostgreSQL and can be safely re-issued.
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
@@ -89,7 +91,7 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
-    rescue PG::ConnectionBad => e
+    rescue PG::ConnectionBad, Pgtk::Impatient::TooSlow => e
       attempt += 1
       raise(e) if attempt >= @attempts
       retry
