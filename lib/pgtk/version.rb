@@ -10,5 +10,5 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 module Pgtk
-  VERSION = '0.0.0' unless defined?(VERSION)
+  VERSION = '0.30.9' unless defined?(VERSION)
 end
