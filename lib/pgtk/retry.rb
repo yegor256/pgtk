@@ -91,11 +91,11 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
-    rescue PG::ConnectionBad, Pgtk::Impatient::TooSlow => e
+    rescue PG::ConnectionBad => e
       attempt += 1
       raise(e) if attempt >= @attempts
       retry
-    rescue StandardError => e
+    rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(e) if attempt >= @attempts

@@ -324,8 +324,8 @@ class TestRetry < Pgtk::Test
         pool.exec(sql, *args)
       end
       retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Slow Test'])
-      assert_equal(3, counter, 'insert must be retried on Impatient::TooSlow')
+      retrier.exec('SELECT * FROM book WHERE title = $1', ['Slow Test'])
+      assert_equal(3, counter, 'SELECT must be retried on Impatient::TooSlow')
     end
   end
 
