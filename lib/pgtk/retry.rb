@@ -49,11 +49,17 @@ require_relative 'impatient'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Retry
+  # Raised when all retry attempts have been exhausted. The original
+  # exception that caused the last failure is available via #cause,
+  # so its message and stack trace are preserved for debugging.
+  class Exhausted < StandardError; end
+
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
   # @param [Integer] attempts Number of attempts to make (default: 3)
   def initialize(pool, attempts: 3)
+    raise(ArgumentError, "Attempts must be at least 2, while #{attempts} provided") if attempts < 2
     @pool = pool
     @attempts = attempts
   end
@@ -93,12 +99,12 @@ class Pgtk::Retry
       @pool.exec(sql, *)
     rescue PG::ConnectionBad => e
       attempt += 1
-      raise(e) if attempt >= @attempts
+      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
-      raise(e) if attempt >= @attempts
+      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       retry
     end
   end

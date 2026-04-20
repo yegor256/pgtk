@@ -71,9 +71,12 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Persistent failure')
       end
       retrier = Pgtk::Retry.new(stub, attempts: 2)
-      assert_raises(PG::Error) do
-        retrier.exec('SELECT * FROM users')
-      end
+      e =
+        assert_raises(Pgtk::Retry::Exhausted) do
+          retrier.exec('SELECT * FROM users')
+        end
+      assert_kind_of(PG::Error, e.cause, 'original exception must be preserved as cause')
+      assert_equal('Persistent failure', e.cause.message, 'original message must be reachable via cause')
     end
   end
 
@@ -201,7 +204,7 @@ class TestRetry < Pgtk::Test
     end
   end
 
-  def test_preserves_original_error_type
+  def test_preserves_original_error_as_cause
     fake_pool do |_pool|
       stub = Object.new
       def stub.version
@@ -211,9 +214,11 @@ class TestRetry < Pgtk::Test
         raise(ArgumentError, 'Invalid argument')
       end
       retrier = Pgtk::Retry.new(stub, attempts: 2)
-      assert_raises(ArgumentError) do
-        retrier.exec('SELECT * FROM table')
-      end
+      e =
+        assert_raises(Pgtk::Retry::Exhausted) do
+          retrier.exec('SELECT * FROM table')
+        end
+      assert_kind_of(ArgumentError, e.cause, 'original ArgumentError must be preserved as cause')
     end
   end
 
