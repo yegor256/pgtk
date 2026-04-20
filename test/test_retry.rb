@@ -241,60 +241,22 @@ class TestRetry < Pgtk::Test
     end
   end
 
-  def test_retries_insert_on_connection_bad
-    fake_pool do |pool|
+  def test_does_not_retry_insert_on_connection_bad
+    fake_pool do |_pool|
       counter = 0
       stub = Object.new
       def stub.version
         'stub'
       end
-      stub.define_singleton_method(:exec) do |sql, *args|
+      stub.define_singleton_method(:exec) do |_sql, *_args|
         counter += 1
-        raise(PG::ConnectionBad, 'SSL error: decryption failed') if counter < 2
-        pool.exec(sql, *args)
+        raise(PG::ConnectionBad, 'SSL error: decryption failed')
       end
       retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Connection Test'])
-      assert_predicate(Integer(result.first['id'], 10), :positive?, 'insert must return a valid id')
-      assert_equal(2, counter, 'insert must be retried on PG::ConnectionBad')
-    end
-  end
-
-  def test_retries_update_on_connection_bad
-    fake_pool do |pool|
-      pool.exec('INSERT INTO book (title) VALUES ($1)', ['Update Test'])
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
+      assert_raises(PG::ConnectionBad) do
+        retrier.exec('INSERT INTO book (title) VALUES ($1)', ['Connection Test'])
       end
-      stub.define_singleton_method(:exec) do |sql, *args|
-        counter += 1
-        raise(PG::ConnectionBad, 'Connection reset by peer') if counter < 3
-        pool.exec(sql, *args)
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('UPDATE book SET title = $1 WHERE title = $2', ['Updated', 'Update Test'])
-      assert_equal(3, counter, 'update must be retried on PG::ConnectionBad')
-    end
-  end
-
-  def test_retries_delete_on_connection_bad
-    fake_pool do |pool|
-      pool.exec('INSERT INTO book (title) VALUES ($1)', ['Delete Test'])
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
-      end
-      stub.define_singleton_method(:exec) do |sql, *args|
-        counter += 1
-        raise(PG::ConnectionBad, 'Server closed connection') if counter < 2
-        pool.exec(sql, *args)
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('DELETE FROM book WHERE title = $1', ['Delete Test'])
-      assert_equal(2, counter, 'delete must be retried on PG::ConnectionBad')
+      assert_equal(1, counter, 'insert must not be retried on PG::ConnectionBad')
     end
   end
 
@@ -367,7 +329,7 @@ class TestRetry < Pgtk::Test
       assert_raises(PG::ConnectionBad) do
         retrier.exec('INSERT INTO book (title) VALUES ($1)', ['Fail Test'])
       end
-      assert_equal(3, counter, 'insert must fail after max attempts')
+      assert_equal(1, counter, 'insert must not be retried')
     end
   end
 end

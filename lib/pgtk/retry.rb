@@ -85,10 +85,11 @@ class Pgtk::Retry
     ].join("\n")
   end
 
-  # Execute a SQL query with automatic retry for SELECT queries.
-  # Also retries PG::ConnectionBad and Pgtk::Impatient::TooSlow errors
-  # for all query types, since they indicate the query never completed
-  # against PostgreSQL and can be safely re-issued.
+  # Execute a SQL query with automatic retry for SELECT queries only.
+  # Non-SELECT queries fail on the first error, since a failure may occur
+  # after the server received the query but before the acknowledgement
+  # reached the client, and retrying a non-idempotent write could duplicate
+  # it.
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
@@ -97,10 +98,6 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
-    rescue PG::ConnectionBad => e
-      attempt += 1
-      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
-      retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
