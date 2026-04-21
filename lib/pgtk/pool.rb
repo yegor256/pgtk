@@ -49,16 +49,22 @@ require_relative 'wire'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Pool
+  # Raised when no connection becomes available from the pool within
+  # the configured timeout. Indicates that all connections are currently
+  # taken by other threads and none was returned in time.
+  class Busy < StandardError; end
+
   # Constructor.
   #
   # @param [Pgtk::Wire] wire The wire
   # @param [Integer] max Total amount of PostgreSQL connections in the pool
+  # @param [Numeric] timeout Max seconds to wait for a free connection
   # @param [Object] log The log
-  def initialize(wire, max: 8, log: Loog::NULL)
+  def initialize(wire, max: 8, timeout: 1, log: Loog::NULL)
     @wire = wire
     @max = max
     @log = log
-    @pool = IterableQueue.new(max)
+    @pool = IterableQueue.new(max, timeout)
     @started = false
   end
 
@@ -231,8 +237,9 @@ class Pgtk::Pool
   # the internal array but is marked as "taken". When returned, it's placed
   # back in its original slot and marked as available.
   class IterableQueue
-    def initialize(size)
+    def initialize(size, timeout)
       @size = size
+      @timeout = timeout
       @items = []
       @taken = []
       @mutex = Mutex.new
@@ -259,7 +266,12 @@ class Pgtk::Pool
 
     def pop
       @mutex.synchronize do
-        @condition.wait(@mutex) while @taken.all? || @items.empty?
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
+        while @taken.all? || @items.empty?
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          raise(Busy, "No free connection appeared in the pool after #{@timeout}s of waiting") if remaining <= 0
+          @condition.wait(@mutex, remaining)
+        end
         index = @taken.index(false)
         @taken[index] = true
         @items[index]

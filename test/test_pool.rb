@@ -181,6 +181,17 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_raises_busy_when_no_connection_appears_in_time
+    fake_config do |f|
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, timeout: 0.1, log: Loog::NULL)
+      pool.start!
+      holder = Thread.new { pool.exec('SELECT pg_sleep(1)') }
+      sleep(0.2)
+      assert_raises(Pgtk::Pool::Busy) { pool.exec('SELECT 1') }
+      holder.join
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
