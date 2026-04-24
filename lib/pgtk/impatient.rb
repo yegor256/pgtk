@@ -119,13 +119,19 @@ class Pgtk::Impatient
     end
   end
 
-  # Run a transaction with a timeout for each query.
+  # Run a transaction with a timeout for each query and for idle time inside
+  # the transaction. If the transaction stays in the +INTRANS+ state (idle
+  # inside transaction) for longer than the configured timeout, PostgreSQL
+  # terminates the session, which frees locks and releases the connection
+  # slot back to the pool.
   #
   # @yield [Pgtk::Impatient] Yields an impatient transaction
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      t.exec("SET LOCAL statement_timeout = #{Integer((@timeout * 1000).to_s, 10)}")
+      ms = Integer((@timeout * 1000).to_s, 10)
+      t.exec("SET LOCAL statement_timeout = #{ms}")
+      t.exec("SET LOCAL idle_in_transaction_session_timeout = #{ms}")
       yield(Pgtk::Impatient.new(t, @timeout))
     end
   end

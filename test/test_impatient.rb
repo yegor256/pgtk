@@ -79,4 +79,16 @@ class TestImpatient < Pgtk::Test
       end
     end
   end
+
+  def test_terminates_idle_in_transaction
+    fake_pool do |pool|
+      assert_raises(StandardError) do
+        Pgtk::Impatient.new(pool, 0.2).transaction do |t|
+          t.exec('SELECT 1')
+          sleep(2)
+          t.exec('SELECT 1')
+        end
+      end
+    end
+  end
 end
