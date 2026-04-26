@@ -343,14 +343,25 @@ class Pgtk::Pool
 
   def connect
     conn = @pool.pop
+    conn = renew(conn) if dead?(conn)
     begin
       yield(conn)
     rescue StandardError => e
-      conn = renew(conn)
+      begin
+        conn = renew(conn)
+      rescue StandardError => re
+        @log.warn("Failed to renew connection after #{e.message}: #{re.message}")
+      end
       raise(e)
     ensure
       @pool.push(conn)
     end
+  end
+
+  def dead?(conn)
+    conn.finished? || conn.status == PG::Constants::CONNECTION_BAD
+  rescue StandardError
+    true
   end
 
   def renew(conn)

@@ -192,6 +192,18 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_renews_dead_connections_proactively
+    fake_pool(3) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map { |c| c.close unless c.finished? }
+      Threads.new(3).assert(15) do
+        assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
+      end
+      refute_includes(pool.dump, 'connection is closed', 'dead connections must not linger in the pool')
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
