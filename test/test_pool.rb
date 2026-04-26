@@ -192,6 +192,39 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_renews_connections_left_in_failed_transaction
+    fake_pool(2) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map do |c|
+        c.exec('BEGIN')
+        begin
+          c.exec('SELECT * FROM nonexistent_table_zzz')
+        rescue PG::UndefinedTable
+          nil
+        end
+      end
+      Threads.new(2).assert(15) do
+        pool.transaction do |t|
+          assert_equal('42', t.exec('SELECT 42 AS n')[0]['n'])
+        end
+      end
+    end
+  end
+
+  def test_rolls_back_transaction_on_non_standard_error
+    fake_pool do |pool|
+      pool.exec('DELETE FROM book')
+      assert_raises(SystemExit) do
+        pool.transaction do |t|
+          t.exec('INSERT INTO book (title) VALUES ($1)', ['x'])
+          raise(SystemExit)
+        end
+      end
+      assert_empty(pool.exec('SELECT * FROM book'), 'transaction must rollback even on non-StandardError')
+    end
+  end
+
   def test_renews_dead_connections_proactively
     fake_pool(3) do |pool|
       pool.exec('SELECT 1')

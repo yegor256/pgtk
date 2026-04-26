@@ -219,9 +219,14 @@ class Pgtk::Pool
         r = yield(t)
         t.exec('COMMIT')
         r
-      rescue StandardError => e
-        t.exec('ROLLBACK')
-        raise(e)
+      ensure
+        if c.transaction_status != PG::Constants::PQTRANS_IDLE
+          begin
+            t.exec('ROLLBACK')
+          rescue StandardError => e
+            @log.warn("Failed to rollback transaction: #{e.message}")
+          end
+        end
       end
     end
   end
@@ -359,7 +364,9 @@ class Pgtk::Pool
   end
 
   def dead?(conn)
-    conn.finished? || conn.status == PG::Constants::CONNECTION_BAD
+    conn.finished? ||
+      conn.status == PG::Constants::CONNECTION_BAD ||
+      conn.transaction_status != PG::Constants::PQTRANS_IDLE
   rescue StandardError
     true
   end
