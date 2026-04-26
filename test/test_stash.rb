@@ -346,6 +346,24 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_cold_miss_marks_entry_stale_when_modify_races
+    fake_pool do |real_pool|
+      triggered = false
+      stash = nil
+      hook =
+        lambda do |q|
+          next if triggered
+          next unless q.start_with?('SELECT title FROM book')
+          triggered = true
+          stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+        end
+      stash = Pgtk::Stash.new(HookedPool.new(real_pool, hook))
+      stash.exec('SELECT title FROM book')
+      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
+      assert_includes(titles, 'B', 'cannot see row inserted during a cold-miss SELECT')
+    end
+  end
+
   def test_capture_entrance_in_stash_iterators_with_multithreading
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, threads: 1, refill: 1)
