@@ -209,6 +209,7 @@ class Pgtk::Pool
       @timeout = timeout
       @items = []
       @taken = []
+      @free = []
       @mutex = Mutex.new
       @condition = ConditionVariable.new
     end
@@ -218,6 +219,7 @@ class Pgtk::Pool
         if @items.size < @size
           @items << item
           @taken << false
+          @free << (@items.size - 1)
         else
           index = @items.index(item)
           if index.nil?
@@ -226,6 +228,7 @@ class Pgtk::Pool
             @items[index] = item
           end
           @taken[index] = false
+          @free << index
         end
         @condition.signal
       end
@@ -234,12 +237,12 @@ class Pgtk::Pool
     def pop
       @mutex.synchronize do
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
-        while @taken.all? || @items.empty?
+        while @free.empty?
           remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
           raise(Busy, "No free connection appeared in the pool after #{@timeout}s of waiting") if remaining <= 0
           @condition.wait(@mutex, remaining)
         end
-        index = @taken.index(false)
+        index = @free.shift
         @taken[index] = true
         @items[index]
       end
@@ -274,6 +277,7 @@ class Pgtk::Pool
       start = Time.now
       sql = query.is_a?(Array) ? query.join(' ') : query
       @conn.instance_variable_set(:@pgtk_last_query, sql)
+      @conn.instance_variable_set(:@pgtk_started_at, start)
       begin
         out =
           if args.empty?
@@ -359,6 +363,10 @@ class Pgtk::Pool
       statuses.fetch(conn.status, "status=#{conn.status}"),
       transactions.fetch(conn.transaction_status, "transaction_status=#{conn.transaction_status}")
     ]
+    if conn.transaction_status != PG::Constants::PQTRANS_IDLE
+      started = conn.instance_variable_get(:@pgtk_started_at)
+      parts << started.ago if started
+    end
     if conn.transaction_status == PG::Constants::PQTRANS_ACTIVE
       running = conn.instance_variable_get(:@pgtk_last_query)
       parts << "running: #{running.gsub(/\s+/, ' ').strip.ellipsized(60)}" if running
