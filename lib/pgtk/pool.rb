@@ -4,6 +4,7 @@ require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'ellipsized'
 require 'pg'
 require 'tago'
 require_relative '../pgtk'
@@ -342,13 +343,18 @@ class Pgtk::Pool
     transactions = { PG::Constants::PQTRANS_IDLE => 'IDLE', PG::Constants::PQTRANS_ACTIVE => 'ACTIVE',
                      PG::Constants::PQTRANS_INTRANS => 'INTRANS', PG::Constants::PQTRANS_INERROR => 'INERROR',
                      PG::Constants::PQTRANS_UNKNOWN => 'UNKNOWN' }
-    [
+    parts = [
       '    ',
       "##{conn.backend_pid}",
       pipelines.fetch(conn.pipeline_status, "pipeline_status=#{conn.pipeline_status}"),
       statuses.fetch(conn.status, "status=#{conn.status}"),
       transactions.fetch(conn.transaction_status, "transaction_status=#{conn.transaction_status}")
-    ].join(' ')
+    ]
+    if conn.transaction_status == PG::Constants::PQTRANS_ACTIVE
+      running = conn.instance_variable_get(:@pgtk_last_query)
+      parts << "running: #{running.gsub(/\s+/, ' ').strip.ellipsized(60)}" if running
+    end
+    parts.join(' ')
   rescue PG::ConnectionBad => e
     parts = [e.message.strip]
     closed = conn.instance_variable_get(:@pgtk_closed_at)
@@ -356,11 +362,7 @@ class Pgtk::Pool
     reason = conn.instance_variable_get(:@pgtk_closed_reason)
     parts << "because: #{reason}" if reason
     last = conn.instance_variable_get(:@pgtk_last_query)
-    if last
-      one = last.gsub(/\s+/, ' ').strip
-      one = "#{one[0...117]}..." if one.size > 120
-      parts << "last query: #{one}"
-    end
+    parts << "last query: #{last.gsub(/\s+/, ' ').strip.ellipsized(60)}" if last
     parts.join(', ')
   end
 

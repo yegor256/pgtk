@@ -255,6 +255,41 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_dumps_running_query_for_active_connection
+    fake_pool(2) do |pool|
+      pool.version
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      conn = items.first
+      conn.instance_variable_set(:@pgtk_last_query, 'SELECT pg_sleep(1)')
+      conn.send_query('SELECT pg_sleep(1)')
+      begin
+        assert_match(/running: SELECT pg_sleep/, pool.dump, 'dump must include currently running query')
+      ensure
+        while (r = conn.get_result)
+          r.clear
+        end
+      end
+    end
+  end
+
+  def test_ellipsizes_long_running_query_in_dump
+    fake_pool(2) do |pool|
+      pool.version
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      conn = items.first
+      long = "SELECT pg_sleep(1) /* #{'x' * 200} */"
+      conn.instance_variable_set(:@pgtk_last_query, long)
+      conn.send_query(long)
+      begin
+        assert_match(/running: .{1,60}\.\.\./, pool.dump, 'long running query must be ellipsized to 60 chars')
+      ensure
+        while (r = conn.get_result)
+          r.clear
+        end
+      end
+    end
+  end
+
   def test_renews_dead_connections_proactively
     fake_pool(3) do |pool|
       pool.exec('SELECT 1')
