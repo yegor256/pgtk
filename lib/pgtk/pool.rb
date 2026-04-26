@@ -351,6 +351,7 @@ class Pgtk::Pool
     transactions = { PG::Constants::PQTRANS_IDLE => 'IDLE', PG::Constants::PQTRANS_ACTIVE => 'ACTIVE',
                      PG::Constants::PQTRANS_INTRANS => 'INTRANS', PG::Constants::PQTRANS_INERROR => 'INERROR',
                      PG::Constants::PQTRANS_UNKNOWN => 'UNKNOWN' }
+    conn.instance_variable_set(:@pgtk_pid, conn.backend_pid)
     parts = [
       '    ',
       "##{conn.backend_pid}",
@@ -364,21 +365,25 @@ class Pgtk::Pool
     end
     parts.join(' ')
   rescue PG::ConnectionBad => e
-    parts = [e.message.strip]
+    pid = conn.instance_variable_get(:@pgtk_pid)
+    parts = ['    ']
+    parts << (pid ? "##{pid}" : '#?')
+    parts << e.message.gsub(/\s+/, ' ').strip
     closed = conn.instance_variable_get(:@pgtk_closed_at)
     parts << "#{closed.ago} ago" if closed
     reason = conn.instance_variable_get(:@pgtk_closed_reason)
-    parts << "because: #{reason}" if reason
+    parts << "because: #{reason.gsub(/\s+/, ' ').strip}" if reason
     last = conn.instance_variable_get(:@pgtk_last_query)
     parts << "last query: #{last.gsub(/\s+/, ' ').strip.ellipsized(60)}" if last
-    parts.join(', ')
+    "#{parts.shift} #{parts.shift} #{parts.join(', ')}"
   end
 
   def renew(conn, reason)
     begin
       unless conn.finished?
+        conn.instance_variable_set(:@pgtk_pid, conn.backend_pid)
         conn.instance_variable_set(:@pgtk_closed_at, Time.now)
-        conn.instance_variable_set(:@pgtk_closed_reason, reason)
+        conn.instance_variable_set(:@pgtk_closed_reason, reason.gsub(/\s+/, ' ').strip)
         conn.close
       end
     rescue StandardError => e
