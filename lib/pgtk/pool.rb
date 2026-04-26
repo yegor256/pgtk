@@ -84,48 +84,7 @@ class Pgtk::Pool
       "  Pgtk version: #{Pgtk::VERSION}",
       "  PgSQL version: #{version}",
       "  #{@pool.size} connections:",
-      @pool.map do |c|
-        [
-          '    ',
-          "##{c.backend_pid}",
-          case c.pipeline_status
-          when PG::Constants::PQ_PIPELINE_ON
-            'ON'
-          when PG::Constants::PQ_PIPELINE_OFF
-            'OFF'
-          when PG::Constants::PQ_PIPELINE_ABORTED
-            'ABORTED'
-          else
-            "pipeline_status=#{c.pipeline_status}"
-          end,
-          case c.status
-          when PG::Constants::CONNECTION_OK
-            'OK'
-          when PG::Constants::CONNECTION_BAD
-            'BAD'
-          else
-            "status=#{c.status}"
-          end,
-          case c.transaction_status
-          when PG::Constants::PQTRANS_IDLE
-            'IDLE'
-          when PG::Constants::PQTRANS_ACTIVE
-            'ACTIVE'
-          when PG::Constants::PQTRANS_INTRANS
-            'INTRANS'
-          when PG::Constants::PQTRANS_INERROR
-            'INERROR'
-          when PG::Constants::PQTRANS_UNKNOWN
-            'UNKNOWN'
-          else
-            "transaction_status=#{c.transaction_status}"
-          end
-        ].join(' ')
-      rescue PG::ConnectionBad => e
-        msg = e.message.strip
-        closed_at = c.instance_variable_get(:@pgtk_closed_at)
-        closed_at ? "#{msg} #{closed_at.ago} ago" : msg
-      end
+      @pool.map { |conn| info(conn) }
     ].flatten.join("\n")
   end
 
@@ -313,6 +272,7 @@ class Pgtk::Pool
     def exec(query, args = [], result = 0)
       start = Time.now
       sql = query.is_a?(Array) ? query.join(' ') : query
+      @conn.instance_variable_set(:@pgtk_last_query, sql)
       begin
         out =
           if args.empty?
@@ -350,12 +310,13 @@ class Pgtk::Pool
 
   def connect
     conn = @pool.pop
-    conn = renew(conn) if dead?(conn)
+    reason = cause(conn)
+    conn = renew(conn, reason) if reason
     begin
       yield(conn)
     rescue StandardError => e
       begin
-        conn = renew(conn)
+        conn = renew(conn, "query failed: #{e.message.strip}")
       rescue StandardError => re
         @log.warn("Failed to renew connection after #{e.message}: #{re.message}")
       end
@@ -365,18 +326,49 @@ class Pgtk::Pool
     end
   end
 
-  def dead?(conn)
-    conn.finished? ||
-      conn.status == PG::Constants::CONNECTION_BAD ||
-      conn.transaction_status != PG::Constants::PQTRANS_IDLE
-  rescue StandardError
-    true
+  def cause(conn)
+    return 'finished' if conn.finished?
+    return 'status BAD' if conn.status == PG::Constants::CONNECTION_BAD
+    return "transaction status #{conn.transaction_status}" if conn.transaction_status != PG::Constants::PQTRANS_IDLE
+    nil
+  rescue StandardError => e
+    "inspection failed: #{e.message.strip}"
   end
 
-  def renew(conn)
+  def info(conn)
+    pipelines = { PG::Constants::PQ_PIPELINE_ON => 'ON', PG::Constants::PQ_PIPELINE_OFF => 'OFF',
+                  PG::Constants::PQ_PIPELINE_ABORTED => 'ABORTED' }
+    statuses = { PG::Constants::CONNECTION_OK => 'OK', PG::Constants::CONNECTION_BAD => 'BAD' }
+    transactions = { PG::Constants::PQTRANS_IDLE => 'IDLE', PG::Constants::PQTRANS_ACTIVE => 'ACTIVE',
+                     PG::Constants::PQTRANS_INTRANS => 'INTRANS', PG::Constants::PQTRANS_INERROR => 'INERROR',
+                     PG::Constants::PQTRANS_UNKNOWN => 'UNKNOWN' }
+    [
+      '    ',
+      "##{conn.backend_pid}",
+      pipelines.fetch(conn.pipeline_status, "pipeline_status=#{conn.pipeline_status}"),
+      statuses.fetch(conn.status, "status=#{conn.status}"),
+      transactions.fetch(conn.transaction_status, "transaction_status=#{conn.transaction_status}")
+    ].join(' ')
+  rescue PG::ConnectionBad => e
+    parts = [e.message.strip]
+    closed = conn.instance_variable_get(:@pgtk_closed_at)
+    parts << "#{closed.ago} ago" if closed
+    reason = conn.instance_variable_get(:@pgtk_closed_reason)
+    parts << "because: #{reason}" if reason
+    last = conn.instance_variable_get(:@pgtk_last_query)
+    if last
+      one = last.gsub(/\s+/, ' ').strip
+      one = "#{one[0...117]}..." if one.size > 120
+      parts << "last query: #{one}"
+    end
+    parts.join(', ')
+  end
+
+  def renew(conn, reason)
     begin
       unless conn.finished?
         conn.instance_variable_set(:@pgtk_closed_at, Time.now)
+        conn.instance_variable_set(:@pgtk_closed_reason, reason)
         conn.close
       end
     rescue StandardError => e

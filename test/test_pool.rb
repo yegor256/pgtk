@@ -229,8 +229,29 @@ class TestPool < Pgtk::Test
     fake_pool(2) do |pool|
       pool.version
       items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      pool.send(:renew, items.first)
-      assert_match(/connection is closed\s+\S+ ago/, pool.dump, 'dump must include time since connection was closed')
+      pool.__send__(:renew, items.first, 'some reason')
+      assert_match(/connection is closed,\s+\S+ ago/, pool.dump, 'dump must include time since connection was closed')
+    end
+  end
+
+  def test_dumps_closed_connection_with_reason
+    fake_pool(2) do |pool|
+      pool.version
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      pool.__send__(:renew, items.first, 'forced shutdown by test')
+      assert_match(/because: forced shutdown by test/, pool.dump, 'dump must include reason for closing')
+    end
+  end
+
+  def test_dumps_closed_connection_with_last_query
+    fake_pool(2) do |pool|
+      pool.version
+      pool.exec('SELECT 42 AS marker_query')
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      hit = items.find { |c| c.instance_variable_get(:@pgtk_last_query)&.include?('marker_query') }
+      refute_nil(hit, 'no connection has executed the marker query')
+      pool.__send__(:renew, hit, 'closed by test')
+      assert_match(/last query: SELECT 42 AS marker_query/, pool.dump, 'dump must include last executed query')
     end
   end
 
