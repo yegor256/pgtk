@@ -299,7 +299,7 @@ class Pgtk::Stash
             m = @stash[:queries][q].values.map { |h| h[:used] }.min
             next unless m
             @stash[:queries][q].delete_if { |_, h| h[:used] == m }
-            @stash[:queries].delete_if { |_, kk| kk.empty? }
+            evict(q) if @stash[:queries][q].empty?
           end
         end
       end
@@ -311,10 +311,16 @@ class Pgtk::Stash
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
           @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
-          @stash[:queries].delete_if { |_, kk| kk.empty? }
+          evict(q) if @stash[:queries][q].empty?
         end
       end
     end
+  end
+
+  def evict(query)
+    @stash[:queries].delete(query)
+    @stash[:tables].each_value { |list| list.delete(query) }
+    @stash[:tables].delete_if { |_, list| list.empty? }
   end
 
   def refiller!

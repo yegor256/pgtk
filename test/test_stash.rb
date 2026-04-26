@@ -263,6 +263,33 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_capper_prunes_dead_query_references_from_tables_index
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, cap: 1, capping: 0.1, refill: nil, retirement: nil)
+      stash.start!
+      stash.exec('SELECT id FROM book')
+      sleep(0.02)
+      stash.exec('SELECT title FROM book')
+      sleep(0.4)
+      inner = stash.instance_variable_get(:@stash)
+      live = inner[:queries].keys.sort
+      refs = (inner[:tables]['book'] || []).sort
+      assert_equal(live, refs, 'tables index must drop query strings evicted by the cap')
+    end
+  end
+
+  def test_retiree_prunes_dead_query_references_from_tables_index
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, retire: 0.1, retirement: 0.1, refill: nil, capping: nil)
+      stash.start!
+      stash.exec('SELECT id FROM book')
+      stash.exec('SELECT title FROM book')
+      sleep(0.5)
+      inner = stash.instance_variable_get(:@stash)
+      assert_empty(inner[:tables], 'tables index must drop query strings retired from cache')
+    end
+  end
+
   def test_not_count_queries_that_uncached
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
