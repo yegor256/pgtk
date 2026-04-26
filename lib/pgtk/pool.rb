@@ -311,17 +311,25 @@ class Pgtk::Pool
 
   def connect
     conn = @pool.pop
-    reason = cause(conn)
-    conn = renew(conn, reason) if reason
     begin
-      yield(conn)
-    rescue StandardError => e
-      begin
-        conn = renew(conn, "query failed: #{e.message.strip}")
-      rescue StandardError => re
-        @log.warn("Failed to renew connection after #{e.message}: #{re.message}")
+      reason = cause(conn)
+      if reason
+        begin
+          conn = renew(conn, reason)
+        rescue StandardError => e
+          @log.warn("Failed to renew dead connection (#{reason}): #{e.message}")
+        end
       end
-      raise(e)
+      begin
+        yield(conn)
+      rescue StandardError => e
+        begin
+          conn = renew(conn, "query failed: #{e.message.strip}")
+        rescue StandardError => re
+          @log.warn("Failed to renew connection after #{e.message}: #{re.message}")
+        end
+        raise(e)
+      end
     ensure
       @pool.push(conn)
     end

@@ -302,6 +302,29 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_does_not_leak_slots_when_proactive_renew_fails
+    fake_pool(2) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map { |c| c.close unless c.finished? }
+      original = pool.instance_variable_get(:@wire)
+      broken = Object.new
+      broken.define_singleton_method(:connection) do
+        raise(PG::ConnectionBad, 'simulated outage during proactive renew')
+      end
+      pool.instance_variable_set(:@wire, broken)
+      4.times do
+        pool.exec('SELECT 1')
+      rescue StandardError
+        nil
+      end
+      taken = queue.instance_variable_get(:@taken)
+      refute_includes(taken, true, 'pool slots must not leak when proactive renew raises')
+      pool.instance_variable_set(:@wire, original)
+      assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
