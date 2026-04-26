@@ -364,6 +364,31 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_replenish_survives_eviction_during_keys_snapshot
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil, delay: 0)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      stash.exec('SELECT title FROM book')
+      stash.exec('DELETE FROM book WHERE title = $1', ['A'])
+      query = 'SELECT title FROM book'
+      target = stash.instance_variable_get(:@stash)[:queries][query]
+      target.define_singleton_method(:keys) do
+        snapped = super()
+        snapped.each { |k| delete(k) }
+        snapped
+      end
+      stash.__send__(:replenish, query)
+      tpool = stash.instance_variable_get(:@tpool)
+      tpool.shutdown
+      tpool.wait_for_termination(10)
+      assert(
+        stash.instance_variable_get(:@stash)[:queries][query]&.values&.none? { |h| h[:stale] },
+        'replenish must not crash or leave entries stale when keys vanish between snapshot and access'
+      )
+    end
+  end
+
   def test_capture_entrance_in_stash_iterators_with_multithreading
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, threads: 1, refill: 1)

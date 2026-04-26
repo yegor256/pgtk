@@ -333,16 +333,22 @@ class Pgtk::Stash
   end
 
   def replenish(query)
-    @entrance.with_write_lock { @stash[:queries][query].keys }.each do |k|
-      next unless @stash[:queries][query][k][:stale]
-      next if @stash[:queries][query][k][:stale] > Time.now - @delay
+    snapshot =
+      @entrance.with_read_lock do
+        @stash[:queries][query]&.filter_map do |k, h|
+          next unless h[:stale]
+          next if h[:stale] > Time.now - @delay
+          [k, h[:params], h[:result], h[:stale]]
+        end
+      end
+    return unless snapshot
+    snapshot.each do |k, params, result, mark|
       next if @tpool.queue_length >= @maxqueue
       @tpool.post do
-        h = @stash[:queries][query][k]
-        mark = h[:stale]
-        ret = @pool.exec(query, h[:params], h[:result])
+        ret = @pool.exec(query, params, result)
         @entrance.with_write_lock do
-          h = @stash[:queries][query][k]
+          h = @stash[:queries][query]&.dig(k)
+          next unless h
           if h[:stale] == mark
             h[:ret] = ret
             h.delete(:stale)
