@@ -225,6 +225,15 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_dumps_closed_connection_with_timestamp
+    fake_pool(2) do |pool|
+      pool.version
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      pool.send(:renew, items.first)
+      assert_match(/connection is closed\s+\S+ ago/, pool.dump, 'dump must include time since connection was closed')
+    end
+  end
+
   def test_renews_dead_connections_proactively
     fake_pool(3) do |pool|
       pool.exec('SELECT 1')

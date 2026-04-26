@@ -122,7 +122,9 @@ class Pgtk::Pool
           end
         ].join(' ')
       rescue PG::ConnectionBad => e
-        e.message
+        msg = e.message.strip
+        closed_at = c.instance_variable_get(:@pgtk_closed_at)
+        closed_at ? "#{msg} #{closed_at.ago} ago" : msg
       end
     ].flatten.join("\n")
   end
@@ -373,7 +375,10 @@ class Pgtk::Pool
 
   def renew(conn)
     begin
-      conn.close unless conn.finished?
+      unless conn.finished?
+        conn.instance_variable_set(:@pgtk_closed_at, Time.now)
+        conn.close
+      end
     rescue StandardError => e
       @log.warn("Failed to close connection: #{e.message}")
     end
