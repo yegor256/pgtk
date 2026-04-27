@@ -85,11 +85,14 @@ class Pgtk::Retry
     ].join("\n")
   end
 
-  # Execute a SQL query with automatic retry for SELECT queries only.
-  # Non-SELECT queries fail on the first error, since a failure may occur
-  # after the server received the query but before the acknowledgement
-  # reached the client, and retrying a non-idempotent write could duplicate
-  # it.
+  # Execute a SQL query with automatic retry on transient failures.
+  # SELECT queries are retried on any error, since reads are idempotent.
+  # Non-SELECT queries are retried only on PG::ConnectionBad, since by
+  # definition the query never reached the server, so retrying cannot
+  # duplicate a write. Other errors on writes propagate immediately,
+  # because a failure may occur after the server received the query but
+  # before the acknowledgement reached the client, and retrying a
+  # non-idempotent write could duplicate it.
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
@@ -98,6 +101,10 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
+    rescue PG::ConnectionBad => e
+      attempt += 1
+      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
+      retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
