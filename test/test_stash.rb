@@ -444,6 +444,27 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_cascade_delete_invalidates_child_table_cache
+    fake_pool do |pool|
+      pool.exec('CREATE TABLE org (id INTEGER PRIMARY KEY)')
+      pool.exec(<<~SQL)
+        CREATE TABLE node (
+          id INTEGER PRIMARY KEY,
+          org_id INTEGER REFERENCES org(id) ON DELETE CASCADE,
+          ip TEXT NOT NULL
+        )
+      SQL
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO org (id) VALUES ($1)', [1])
+      stash.exec('INSERT INTO node (id, org_id, ip) VALUES ($1, $2, $3)', [42, 1, '10.0.0.1'])
+      stash.exec('SELECT ip FROM node WHERE id = $1', [42])
+      stash.exec('DELETE FROM org WHERE id = $1', [1])
+      ip = stash.exec('SELECT ip FROM node WHERE id = $1', [42]).first
+      assert_nil(ip, 'cannot serve cached node row after parent org was cascade-deleted')
+    end
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)

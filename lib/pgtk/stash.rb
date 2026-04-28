@@ -89,6 +89,7 @@ class Pgtk::Stash
   # @return [void]
   def start!
     @pool.start!
+    cascade!
     launch!
   end
 
@@ -218,8 +219,9 @@ class Pgtk::Stash
     tables.uniq!
     ret = @pool.exec(pure, params, result)
     now = Time.now
+    affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     @entrance.with_write_lock do
-      tables.each do |t|
+      affected.each do |t|
         @stash[:table_mod][t] = now
         @stash[:tables][t]&.each do |q|
           @stash[:queries][q]&.each_key do |key|
@@ -278,6 +280,35 @@ class Pgtk::Stash
     @entrance.with_write_lock do
       @stash[:queries].values.sum { |kk| kk.values.size }
     end
+  end
+
+  # Discover ON DELETE CASCADE / ON UPDATE CASCADE foreign keys so that a
+  # modify on the parent table also invalidates cached queries on children.
+  #
+  # @return [nil]
+  def cascade!
+    direct = Hash.new { |h, k| h[k] = [] }
+    @pool.exec(<<~SQL).each { |r| direct[r['parent']] << r['child'] }
+      SELECT tc.table_name AS child, ccu.table_name AS parent
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.referential_constraints rc
+        ON tc.constraint_name = rc.constraint_name
+        AND tc.table_schema = rc.constraint_schema
+      JOIN information_schema.constraint_column_usage ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND (rc.delete_rule = 'CASCADE' OR rc.update_rule = 'CASCADE')
+        AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
+    SQL
+    @cascades = direct.keys.to_h { |p| [p, transitive(p, direct, []).uniq] }
+    nil
+  end
+
+  def transitive(parent, direct, seen)
+    return [] if seen.include?(parent)
+    seen << parent
+    direct[parent].flat_map { |c| [c] + transitive(c, direct, seen) }
   end
 
   # Launch background tasks for cache management.
