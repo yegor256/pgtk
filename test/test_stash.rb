@@ -432,4 +432,67 @@ class TestStash < Pgtk::Test
       end
     end
   end
+
+  def test_per_id_select_stays_consistent_under_writer_churn
+    fake_pool(8) do |pool|
+      pool.exec('CREATE TABLE node (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
+      stash = Pgtk::Stash.new(pool, refill: 0.3, delay: 4, capping: 5, retirement: 5, retire: 600)
+      stash.start!
+      hammer(stash, 16, 2, 4, 10)
+      sleep(stash.instance_variable_get(:@refill) + stash.instance_variable_get(:@delay) + 2)
+      assert_empty(diverged(stash, pool, 16), 'stash diverged from DB after settled load')
+    end
+  end
+
+  private
+
+  def hammer(stash, count, writers, readers, seconds)
+    stop = Concurrent::AtomicBoolean.new(false)
+    crashes = Concurrent::Array.new
+    threads =
+      Array.new(writers) { Thread.new { spam(stash, count, stop, crashes) } } +
+      Array.new(readers) { Thread.new { scan(stash, stop, crashes) } }
+    sleep(seconds)
+    stop.make_true
+    threads.each(&:join)
+    assert_empty(crashes, "thread crashed: #{crashes.first}")
+  end
+
+  def spam(stash, count, stop, crashes)
+    until stop.value
+      id = rand(count)
+      begin
+        stash.exec('INSERT INTO node (id, payload) VALUES ($1, $2)', [id, "p-#{id}-#{rand(1_000_000)}"])
+        stash.exec('DELETE FROM node WHERE id = $1', [id])
+      rescue PG::UniqueViolation
+        next
+      end
+    end
+  rescue StandardError => e
+    crashes << "writer: #{e.class}: #{e.message}"
+  end
+
+  def scan(stash, stop, crashes)
+    until stop.value
+      ids = stash.exec('SELECT id FROM node ORDER BY id').map { |r| Integer(r['id'], 10) }
+      ids.each { |id| stash.exec('SELECT payload FROM node WHERE id = $1', [id]) }
+    end
+  rescue StandardError => e
+    crashes << "reader: #{e.class}: #{e.message}"
+  end
+
+  def diverged(stash, pool, count)
+    truth = pool.exec('SELECT id, payload FROM node').to_h { |r| [Integer(r['id'], 10), r['payload']] }
+    bugs = []
+    count.times do |id|
+      cached = stash.exec('SELECT payload FROM node WHERE id = $1', [id]).first
+      expected = truth[id]
+      if expected.nil?
+        bugs << "id=#{id}: stash=#{cached.inspect}, DB has no row" unless cached.nil?
+      elsif cached.nil? || cached['payload'] != expected
+        bugs << "id=#{id}: stash=#{cached.inspect}, DB=#{expected.inspect}"
+      end
+    end
+    bugs
+  end
 end
