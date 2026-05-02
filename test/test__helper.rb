@@ -42,9 +42,8 @@ require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 
 class Pgtk::Test < Minitest::Test
-  def fake_config
+  def fake_config(id: Integer(Time.now.strftime('%s%6N'), 10) % 1_000_000)
     Dir.mktmpdir do |dir|
-      id = Integer(Time.now.strftime('%s%6N'), 10) % 1_000_000
       f = File.join(dir, 'cfg.yml')
       Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
         t.dir = File.join(dir, 'pgsql')
