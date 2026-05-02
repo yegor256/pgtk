@@ -37,15 +37,18 @@ require 'logger'
 require 'loog'
 require 'rake'
 require 'rake/tasklib'
+require 'securerandom'
 require_relative '../lib/pgtk'
 require_relative '../lib/pgtk/liquibase_task'
 require_relative '../lib/pgtk/pgsql_task'
 
 class Pgtk::Test < Minitest::Test
-  def fake_config(id: Integer(Time.now.strftime('%s%6N'), 10) % 1_000_000)
+  def fake_config(id: SecureRandom.hex(8))
     Dir.mktmpdir do |dir|
       f = File.join(dir, 'cfg.yml')
-      Pgtk::PgsqlTask.new("pgsql#{id}") do |t|
+      pgsql = "pgsql#{id}"
+      Rake::Task[pgsql].clear if Rake::Task.task_defined?(pgsql)
+      Pgtk::PgsqlTask.new(pgsql) do |t|
         t.dir = File.join(dir, 'pgsql')
         t.user = 'hello'
         t.password = 'A B C привет ! & | !'
@@ -53,13 +56,17 @@ class Pgtk::Test < Minitest::Test
         t.yaml = f
         t.quiet = true
       end
-      Rake::Task["pgsql#{id}"].invoke
-      Pgtk::LiquibaseTask.new("liquibase#{id}") do |t|
+      Rake::Task[pgsql].reenable
+      Rake::Task[pgsql].invoke
+      lb = "liquibase#{id}"
+      Rake::Task[lb].clear if Rake::Task.task_defined?(lb)
+      Pgtk::LiquibaseTask.new(lb) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = f
         t.quiet = true
       end
-      Rake::Task["liquibase#{id}"].invoke
+      Rake::Task[lb].reenable
+      Rake::Task[lb].invoke
       assert_path_exists(f)
       yield(f)
     end
