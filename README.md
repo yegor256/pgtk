@@ -284,7 +284,9 @@ retry_pool.exec('INSERT INTO logs (message) VALUES ($1)', ['User logged in'])
 Key features:
 
 1. Only `SELECT` queries are retried (to prevent duplicate data modifications)
-2. Retries happen immediately without delay
+2. Retries happen immediately, except on `PG::ConnectionBad`,
+   where an exponential backoff (50ms, 200ms, 1s) is applied
+   between attempts to avoid amplifying upstream login storms
 3. The original error is raised after all retry attempts are exhausted
 4. Works seamlessly with other decorators like `Pgtk::Spy` and `Pgtk::Impatient`
 

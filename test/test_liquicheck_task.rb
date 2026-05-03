@@ -84,7 +84,7 @@ class TestLiquicheckTask < Pgtk::Test
         /004-some-migration.xml.+\n.+ID "00-test" is not the beginning of a logicalFilePath "004-some-migration.xml"/,
         out
       )
-      assert_match(/005-some-migration.xml.+\n.+ID "005" has not suffix/, out)
+      assert_match(/005-some-migration.xml.+\n.+ID "005" has no suffix/, out)
       assert_match(
         /006-some-migration.xml.+\n.+logicalFilePath\s
         "006-other-migration.xml"\sdoes\snot\sequal\sthe\sxml\sfile\sname\s"006-some-migration.xml"/x,
