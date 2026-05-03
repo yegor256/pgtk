@@ -4,18 +4,21 @@
 # SPDX-License-Identifier: MIT
 
 require 'ellipsized'
-require 'securerandom'
+require 'pg'
 require 'tago'
-require 'timeout'
 require_relative '../pgtk'
 
 # Impatient is a decorator for Pool that enforces timeouts on all database operations.
 # It ensures that SQL queries don't run indefinitely, which helps prevent application
 # hangs and resource exhaustion when database operations are slow or stalled.
 #
-# This class implements the same interface as Pool but wraps each database operation
-# in a timeout block. If a query exceeds the specified timeout, it raises a Timeout::Error
-# exception, allowing the application to handle slow queries gracefully.
+# This class implements the same interface as Pool but enforces the timeout on the
+# server side, by wrapping each query in a tiny transaction that issues
+# +SET LOCAL statement_timeout+. PostgreSQL itself terminates the query at the
+# deadline, which guarantees that the server-side connection slot is freed even
+# when the client cannot deliver a cancellation request (for example, behind a
+# transaction-pool PgBouncer that does not forward client disconnects to in-flight
+# server queries). On timeout, +TooSlow+ is raised.
 #
 # Basic usage:
 #
@@ -29,7 +32,7 @@ require_relative '../pgtk'
 #   # Execute queries with automatic timeout enforcement
 #   begin
 #     impatient.exec('SELECT * FROM large_table WHERE complex_condition')
-#   rescue Timeout::Error
+#   rescue Pgtk::Impatient::TooSlow
 #     puts "Query timed out after 2 seconds"
 #   end
 #
@@ -39,7 +42,7 @@ require_relative '../pgtk'
 #       t.exec('UPDATE large_table SET processed = true')
 #       t.exec('DELETE FROM queue WHERE processed = true')
 #     end
-#   rescue Timeout::Error
+#   rescue PG::QueryCanceled
 #     puts "Transaction timed out"
 #   end
 #
@@ -91,23 +94,30 @@ class Pgtk::Impatient
     ].join("\n")
   end
 
-  # Execute a SQL query with a timeout.
+  # Execute a SQL query with a server-side timeout.
+  #
+  # The query is wrapped in a tiny transaction that issues
+  # +SET LOCAL statement_timeout+, so PostgreSQL itself terminates the query
+  # at the deadline. This guarantees the server-side connection slot is freed
+  # even when the client cannot deliver a cancellation request (for example,
+  # behind a transaction-pool PgBouncer). When the deadline fires, the
+  # underlying +PG::QueryCanceled+ is translated to +TooSlow+.
   #
   # @param [String, Array] query The SQL query with params inside (possibly)
   # @param [Array] args List of arguments
   # @return [Array] Result rows
-  # @raise [Timeout::Error] If the query takes too long
+  # @raise [TooSlow] If the query takes too long
   def exec(query, *args)
     sql = query.is_a?(Array) ? query.join(' ') : query
     return @pool.exec(sql, *args) if @off.any? { |re| re.match?(sql) }
     start = Time.now
-    token = SecureRandom.uuid
+    ms = [Integer(@timeout * 1000), 1].max
     begin
-      Timeout.timeout(@timeout, Timeout::Error, token) do
-        @pool.exec(sql, *args)
+      @pool.transaction do |t|
+        t.exec("SET LOCAL statement_timeout = #{ms}")
+        t.exec(sql, *args)
       end
-    rescue Timeout::Error => e
-      raise(e) unless e.message == token
+    rescue PG::QueryCanceled
       raise(TooSlow, [
         'SQL query',
         ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
@@ -125,14 +135,14 @@ class Pgtk::Impatient
   # terminates the session, which frees locks and releases the connection
   # slot back to the pool.
   #
-  # @yield [Pgtk::Impatient] Yields an impatient transaction
+  # @yield [Object] Yields a transaction object that responds to +exec+
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      ms = Integer((@timeout * 1000).to_s, 10)
+      ms = [Integer(@timeout * 1000), 1].max
       t.exec("SET LOCAL statement_timeout = #{ms}")
       t.exec("SET LOCAL idle_in_transaction_session_timeout = #{ms}")
-      yield(Pgtk::Impatient.new(t, @timeout))
+      yield(t)
     end
   end
 end

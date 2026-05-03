@@ -202,12 +202,20 @@ You can exclude specific queries from timeout enforcement using regex patterns:
 impatient = Pgtk::Impatient.new(pool, 2, /^SELECT/, /^VACUUM/)
 ```
 
+The timeout is enforced on the server side: each query is wrapped in a tiny
+transaction that issues `SET LOCAL statement_timeout`, and PostgreSQL itself
+terminates the query at the deadline. This guarantees the server-side
+connection slot is freed even when the client cannot deliver a cancellation
+request — for example, behind a transaction-pool PgBouncer that does not
+forward client disconnects to in-flight server queries.
+
 Key features:
 
 1. Configurable timeout in seconds for each query
 1. Raises `Pgtk::Impatient::TooSlow` exception when timeout is exceeded
 1. Can exclude queries matching specific patterns from timeout checks
-1. Also sets PostgreSQL's `statement_timeout` for transactions
+1. Sets PostgreSQL's `statement_timeout` per query and per transaction,
+   so timeouts are enforced server-side and orphan backends do not pile up
 
 ## Query Caching with `Pgtk::Stash`
 
