@@ -205,9 +205,9 @@ impatient = Pgtk::Impatient.new(pool, 2, /^SELECT/, /^VACUUM/)
 Key features:
 
 1. Configurable timeout in seconds for each query
-2. Raises `Pgtk::Impatient::TooSlow` exception when timeout is exceeded
-3. Can exclude queries matching specific patterns from timeout checks
-4. Also sets PostgreSQL's `statement_timeout` for transactions
+1. Raises `Pgtk::Impatient::TooSlow` exception when timeout is exceeded
+1. Can exclude queries matching specific patterns from timeout checks
+1. Also sets PostgreSQL's `statement_timeout` for transactions
 
 ## Query Caching with `Pgtk::Stash`
 
@@ -253,9 +253,9 @@ Note that the caching implementation is basic and only suitable
 for simple queries:
 
 1. Queries must reference tables (using `FROM` or `JOIN`)
-2. Cache is invalidated by table, not by specific rows
-3. Write operations (`INSERT`, `UPDATE`, `DELETE`) bypass
-the cache and invalidate all cached queries for affected tables
+1. Cache is invalidated by table, not by specific rows
+1. Write operations (`INSERT`, `UPDATE`, `DELETE`) bypass
+   the cache and invalidate all cached queries for affected tables
 
 ## Automatic Retries with `Pgtk::Retry`
 
@@ -284,11 +284,11 @@ retry_pool.exec('INSERT INTO logs (message) VALUES ($1)', ['User logged in'])
 Key features:
 
 1. Only `SELECT` queries are retried (to prevent duplicate data modifications)
-2. Retries happen immediately, except on `PG::ConnectionBad`,
+1. Retries happen immediately, except on `PG::ConnectionBad`,
    where an exponential backoff (50ms, 200ms, 1s) is applied
    between attempts to avoid amplifying upstream login storms
-3. The original error is raised after all retry attempts are exhausted
-4. Works seamlessly with other decorators like `Pgtk::Spy` and `Pgtk::Impatient`
+1. The original error is raised after all retry attempts are exhausted
+1. Works seamlessly with other decorators like `Pgtk::Spy` and `Pgtk::Impatient`
 
 ## Some Examples
 
