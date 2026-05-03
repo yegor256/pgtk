@@ -54,6 +54,8 @@ class Pgtk::Retry
   # so its message and stack trace are preserved for debugging.
   class Exhausted < StandardError; end
 
+  BACKOFFS = [0.05, 0.2, 1.0].freeze
+
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
@@ -86,13 +88,15 @@ class Pgtk::Retry
   end
 
   # Execute a SQL query with automatic retry on transient failures.
-  # SELECT queries are retried on any error, since reads are idempotent.
-  # Non-SELECT queries are retried only on PG::ConnectionBad, since by
-  # definition the query never reached the server, so retrying cannot
-  # duplicate a write. Other errors on writes propagate immediately,
-  # because a failure may occur after the server received the query but
-  # before the acknowledgement reached the client, and retrying a
-  # non-idempotent write could duplicate it.
+  # Only SELECT queries are retried, since reads are idempotent.
+  # Non-SELECT queries propagate the original error immediately, even
+  # on PG::ConnectionBad, because that error can be raised after the
+  # server already received the query but before the acknowledgement
+  # reached the client, and retrying a non-idempotent write could
+  # duplicate it. When the underlying error is PG::ConnectionBad, an
+  # exponential backoff (see BACKOFFS) is applied between attempts, so
+  # that a SELECT failing against an upstream pool that is in its
+  # login-failure cache window does not amplify the storm.
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
@@ -101,14 +105,11 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
-    rescue PG::ConnectionBad => e
-      attempt += 1
-      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
-      retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
+      sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
       retry
     end
   end

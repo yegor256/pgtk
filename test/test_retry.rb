@@ -241,60 +241,6 @@ class TestRetry < Pgtk::Test
     end
   end
 
-  def test_retries_insert_on_connection_bad
-    fake_pool do |pool|
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
-      end
-      stub.define_singleton_method(:exec) do |sql, *args|
-        counter += 1
-        raise(PG::ConnectionBad, 'SSL error: decryption failed') if counter < 2
-        pool.exec(sql, *args)
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('INSERT INTO book (title) VALUES ($1)', ['Connection Test'])
-      assert_equal(2, counter, 'insert must be retried on PG::ConnectionBad since the query never reached the server')
-    end
-  end
-
-  def test_retries_update_on_connection_bad
-    fake_pool do |pool|
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
-      end
-      stub.define_singleton_method(:exec) do |sql, *args|
-        counter += 1
-        raise(PG::ConnectionBad, 'SSL error: bad record mac') if counter < 2
-        pool.exec(sql, *args)
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('UPDATE book SET title = $1 WHERE id = $2', ['Updated', 1])
-      assert_equal(2, counter, 'update must be retried on PG::ConnectionBad')
-    end
-  end
-
-  def test_retries_set_on_connection_bad
-    fake_pool do |pool|
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
-      end
-      stub.define_singleton_method(:exec) do |sql, *args|
-        counter += 1
-        raise(PG::ConnectionBad, 'PQconsumeInput() SSL error') if counter < 2
-        pool.exec(sql, *args)
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec("SET statement_timeout = '15s'")
-      assert_equal(2, counter, 'SET must be retried on PG::ConnectionBad')
-    end
-  end
-
   def test_retries_select_on_too_slow
     fake_pool do |pool|
       counter = 0
@@ -349,27 +295,6 @@ class TestRetry < Pgtk::Test
     end
   end
 
-  def test_fails_insert_after_max_connection_bad_attempts
-    fake_pool do |_pool|
-      counter = 0
-      stub = Object.new
-      def stub.version
-        'stub'
-      end
-      stub.define_singleton_method(:exec) do |_sql, *_args|
-        counter += 1
-        raise(PG::ConnectionBad, 'Persistent connection failure')
-      end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      e =
-        assert_raises(Pgtk::Retry::Exhausted) do
-          retrier.exec('INSERT INTO book (title) VALUES ($1)', ['Fail Test'])
-        end
-      assert_kind_of(PG::ConnectionBad, e.cause, 'original PG::ConnectionBad must be preserved as cause')
-      assert_equal(3, counter, 'insert must be retried up to the configured limit on PG::ConnectionBad')
-    end
-  end
-
   def test_does_not_retry_non_select_on_connection_bad
     fake_pool do |_pool|
       counter = 0
@@ -385,7 +310,10 @@ class TestRetry < Pgtk::Test
       assert_raises(PG::ConnectionBad) do
         retrier.exec('INSERT INTO book (title) VALUES ($1)', ['No Retry'])
       end
-      assert_equal(1, counter, 'non-SELECT must not be retried on PG::ConnectionBad, since the response may be lost after the server received the query')
+      assert_equal(
+        1, counter,
+        'non-SELECT must not be retried on PG::ConnectionBad: the response may be lost after the server got the query'
+      )
     end
   end
 end
