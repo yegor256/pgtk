@@ -302,6 +302,27 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_does_not_double_login_when_proactive_renew_fails
+    fake_pool(1) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map { |c| c.close unless c.finished? }
+      attempts = 0
+      broken = Object.new
+      broken.define_singleton_method(:connection) do
+        attempts += 1
+        raise(PG::ConnectionBad, 'simulated outage during proactive renew')
+      end
+      pool.instance_variable_set(:@wire, broken)
+      begin
+        pool.exec('SELECT 1')
+      rescue StandardError
+        nil
+      end
+      assert_equal(1, attempts, 'login must not be retried after proactive renew has already failed')
+    end
+  end
+
   def test_does_not_leak_slots_when_proactive_renew_fails
     fake_pool(2) do |pool|
       pool.exec('SELECT 1')

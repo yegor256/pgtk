@@ -322,6 +322,7 @@ class Pgtk::Pool
           conn = renew(conn, reason)
         rescue StandardError => e
           @log.warn("Failed to renew dead connection (#{reason}): #{e.message}")
+          raise(e)
         end
       end
       begin
