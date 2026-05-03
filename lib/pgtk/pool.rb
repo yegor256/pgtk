@@ -114,7 +114,7 @@ class Pgtk::Pool
   #    puts 'Title: ' + row['title']
   #  end
   #
-  # All values in the retrieved hash are strings. No matter what types of
+  # All values in the retrieved hash are strings. No matter what types
   # of data you have in the database, you get strings here. It's your job
   # to convert them to the type you need.
   #

@@ -7,7 +7,7 @@ require 'nokogiri'
 require 'rake/tasklib'
 require_relative '../pgtk'
 
-# Liquicheck rake task for check Liquibase XML files.
+# Liquicheck rake task to check Liquibase XML files.
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
@@ -63,7 +63,7 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
     context = node.attr('context')&.to_s
     on(errors, file) do
       demand(id, 'ID is empty')
-      confirm(id, /[-a-z]+/, "ID #{id.inspect} has not suffix in #{context} context") if context
+      confirm(id, /[-a-z]+/, "ID #{id.inspect} has no suffix in #{context} context") if context
     end
     on(errors, file) do
       demand(author, 'author is empty')
