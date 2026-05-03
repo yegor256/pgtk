@@ -369,4 +369,23 @@ class TestRetry < Pgtk::Test
       assert_equal(3, counter, 'insert must be retried up to the configured limit on PG::ConnectionBad')
     end
   end
+
+  def test_does_not_retry_non_select_on_connection_bad
+    fake_pool do |_pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |_sql, *_args|
+        counter += 1
+        raise(PG::ConnectionBad, 'server closed the connection unexpectedly')
+      end
+      retrier = Pgtk::Retry.new(stub, attempts: 3)
+      assert_raises(PG::ConnectionBad) do
+        retrier.exec('INSERT INTO book (title) VALUES ($1)', ['No Retry'])
+      end
+      assert_equal(1, counter, 'non-SELECT must not be retried on PG::ConnectionBad, since the response may be lost after the server received the query')
+    end
+  end
 end
