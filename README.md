@@ -142,6 +142,31 @@ variable `DATABASE_URL`, formatted like
 pgsql = Pgtk::Pool.new(Pgtk::Wire::Env.new)
 ```
 
+Both `Pgtk::Wire::Direct` and `Pgtk::Wire::Env` accept extra keyword
+arguments and forward them to `PG.connect`, so any
+[libpq parameter](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS)
+can be passed through (`sslmode`, `connect_timeout`, `keepalives`,
+`keepalives_idle`, `application_name`, and so on):
+
+```ruby
+Pgtk::Wire::Direct.new(
+  host: 'db.example.com', port: 5432, dbname: 'app',
+  user: 'u', password: 'p',
+  sslmode: 'require', connect_timeout: 5, keepalives: 1
+)
+Pgtk::Wire::Env.new('DATABASE_URL', sslmode: 'require', keepalives: 1)
+```
+
+`Pgtk::Wire::Env` also honors the URL query string, so options can be
+configured from the environment alone:
+
+```text
+DATABASE_URL=postgres://u:p@h:5432/d?sslmode=require&keepalives=1&keepalives_idle=30
+```
+
+Explicit keyword arguments win over options carried in the URL query string
+on conflict.
+
 Now you can fetch some data from the DB:
 
 ```ruby

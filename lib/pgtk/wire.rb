@@ -25,7 +25,9 @@ module Pgtk::Wire
     # @param [String] dbname Database name
     # @param [String] user Username
     # @param [String] password Password
-    def initialize(host:, port:, dbname:, user:, password:)
+    # @param [Hash] opts Extra options forwarded to +PG.connect+ (e.g. +sslmode+,
+    #   +connect_timeout+, +keepalives+, +keepalives_idle+, +application_name+)
+    def initialize(host:, port:, dbname:, user:, password:, **opts)
       raise(ArgumentError, "The host can't be nil") if host.nil?
       @host = host
       raise(ArgumentError, "The port can't be nil") if port.nil?
@@ -33,11 +35,12 @@ module Pgtk::Wire
       @dbname = dbname
       @user = user
       @password = password
+      @opts = opts
     end
 
     # Create a new connection to PostgreSQL server.
     def connection
-      PG.connect(dbname: @dbname, host: @host, port: @port, user: @user, password: @password)
+      PG.connect(dbname: @dbname, host: @host, port: @port, user: @user, password: @password, **@opts)
     end
   end
 
@@ -54,21 +57,27 @@ module Pgtk::Wire
     # Constructor.
     #
     # @param [String] var The name of the environment variable with the connection URL
-    def initialize(var = 'DATABASE_URL')
+    # @param [Hash] opts Extra options forwarded to +PG.connect+ (e.g. +sslmode+,
+    #   +connect_timeout+, +keepalives+, +keepalives_idle+, +application_name+).
+    #   Explicit kwargs win over options carried in the URL query string on conflict.
+    def initialize(var = 'DATABASE_URL', **opts)
       raise(ArgumentError, "The name of the environment variable can't be nil") if var.nil?
       @value = ENV.fetch(var, nil)
       raise(ArgumentError, "The environment variable #{@value.inspect} is not set") if @value.nil?
+      @opts = opts
     end
 
     # Create a new connection to PostgreSQL server.
     def connection
       uri = URI(@value)
+      extras = uri.query ? URI.decode_www_form(uri.query).to_h.transform_keys(&:to_sym) : {}
       Pgtk::Wire::Direct.new(
         host: CGI.unescape(uri.host),
         port: uri.port || 5432,
         dbname: CGI.unescape(uri.path[1..]),
         user: CGI.unescape(uri.userinfo.split(':')[0]),
-        password: CGI.unescape(uri.userinfo.split(':')[1])
+        password: CGI.unescape(uri.userinfo.split(':')[1]),
+        **extras.merge(@opts)
       ).connection
     end
   end
