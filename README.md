@@ -129,9 +129,9 @@ You can tune the threshold or disable validation entirely:
 
 ```ruby
 # Validate slots idle for more than 30 seconds
-pgsql = Pgtk::Pool.new(wire, max: 5, validate_after: 30)
+pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'), max: 5, validate_after: 30)
 # Disable validation (e.g. for local Unix-socket PostgreSQL)
-pgsql = Pgtk::Pool.new(wire, max: 5, validate_after: nil)
+pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'), max: 5, validate_after: nil)
 ```
 
 You can also let it pick the connection parameters from the environment
