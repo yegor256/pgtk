@@ -393,6 +393,23 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_validates_stale_connection_before_yielding_to_caller
+    fake_config do |f|
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, idle: 0, log: Loog::NULL)
+      pool.start!
+      pool.exec('SELECT 1')
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      bad = items.first
+      bad.define_singleton_method(:exec) do |*_a, &_b|
+        raise(PG::ConnectionBad, 'SSL error: decryption failed or bad record mac')
+      end
+      assert_equal(
+        '42', pool.exec('SELECT 42 AS n')[0]['n'],
+        'stale connection that fails validation must be silently replaced before yielding to caller'
+      )
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|

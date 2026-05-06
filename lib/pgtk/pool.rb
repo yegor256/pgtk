@@ -57,13 +57,25 @@ class Pgtk::Pool
 
   # Constructor.
   #
+  # The +idle+ option guards against the cold-slot SSL desync that bites
+  # managed PostgreSQL behind a TLS proxy: a slot sits idle long enough for
+  # the proxy and the client to disagree about SSL state, libpq still reports
+  # +CONNECTION_OK+, and the next real query blows up with a decryption error.
+  # When a slot has been idle longer than +idle+ seconds, the pool runs
+  # +SELECT 1+ on it before yielding; if that fails, the slot is renewed
+  # in-line and the caller never sees the error. Set to +nil+ to skip
+  # validation entirely (e.g. for local Unix-socket PostgreSQL).
+  #
   # @param [Pgtk::Wire] wire The wire
   # @param [Integer] max Total amount of PostgreSQL connections in the pool
   # @param [Numeric] timeout Max seconds to wait for a free connection
+  # @param [Numeric, nil] idle Seconds of idleness after which to validate
+  #   a connection on checkout, or +nil+ to disable validation
   # @param [Object] log The log
-  def initialize(wire, max: 8, timeout: 1, log: Loog::NULL)
+  def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
     @wire = wire
     @max = max
+    @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
     @started = false
@@ -324,7 +336,7 @@ class Pgtk::Pool
   def connect
     conn = @pool.pop
     begin
-      reason = cause(conn)
+      reason = cause(conn) || stale(conn)
       if reason
         begin
           conn = renew(conn, reason)
@@ -344,6 +356,7 @@ class Pgtk::Pool
         raise(e)
       end
     ensure
+      conn.instance_variable_set(:@pgtk_last_used, Time.now) if @idle && !conn.finished?
       @pool.push(conn)
     end
   end
@@ -355,6 +368,18 @@ class Pgtk::Pool
     nil
   rescue StandardError => e
     "inspection failed: #{e.message.strip}"
+  end
+
+  def stale(conn)
+    return nil if @idle.nil?
+    last = conn.instance_variable_get(:@pgtk_last_used)
+    return nil if last.nil? || Time.now - last < @idle
+    begin
+      conn.exec('SELECT 1')
+      nil
+    rescue StandardError => e
+      "validation failed after #{last.ago} idle: #{e.message.strip}"
+    end
   end
 
   def info(conn)
