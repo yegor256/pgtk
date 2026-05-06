@@ -346,6 +346,53 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_validates_each_connection_during_start_to_replace_born_sick_slots
+    fake_config do |f|
+      real = Pgtk::Wire::Yaml.new(f)
+      calls = 0
+      flaky = Object.new
+      flaky.define_singleton_method(:connection) do
+        conn = real.connection
+        calls += 1
+        if calls <= 2
+          conn.define_singleton_method(:exec) do |*_a, &_b|
+            raise(PG::ConnectionBad, 'simulated born-sick connection')
+          end
+        end
+        conn
+      end
+      pool = Pgtk::Pool.new(flaky, max: 2, log: Loog::NULL)
+      pool.start!
+      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
+      ok =
+        items.all? do |c|
+          c.exec('SELECT 1')
+          true
+        rescue StandardError
+          false
+        end
+      assert(ok, 'start! must validate each pool slot so born-sick connections never linger')
+    end
+  end
+
+  def test_fails_fast_when_start_cannot_heal_a_persistently_broken_pool
+    fake_config do |f|
+      real = Pgtk::Wire::Yaml.new(f)
+      poison = Object.new
+      poison.define_singleton_method(:connection) do
+        conn = real.connection
+        conn.define_singleton_method(:exec) do |*_a, &_b|
+          raise(PG::ConnectionBad, 'persistently broken connection')
+        end
+        conn
+      end
+      pool = Pgtk::Pool.new(poison, max: 1, log: Loog::NULL)
+      assert_raises(PG::ConnectionBad, 'start! must raise when warm-up cannot make a slot healthy') do
+        pool.start!
+      end
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
