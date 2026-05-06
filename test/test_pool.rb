@@ -364,12 +364,13 @@ class TestPool < Pgtk::Test
       pool = Pgtk::Pool.new(flaky, max: 2, log: Loog::NULL)
       pool.start!
       items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      ok = items.all? do |c|
-        c.exec('SELECT 1')
-        true
-      rescue StandardError
-        false
-      end
+      ok =
+        items.all? do |c|
+          c.exec('SELECT 1')
+          true
+        rescue StandardError
+          false
+        end
       assert(ok, 'start! must validate each pool slot so born-sick connections never linger')
     end
   end
