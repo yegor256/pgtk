@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 require 'cgi'
+require 'securerandom'
 require 'yaml'
 require_relative '../lib/pgtk/wire'
 require_relative 'test__helper'
@@ -43,6 +44,23 @@ class TestWire < Pgtk::Test
       wire = Pgtk::Wire::Env.new(v)
       e = assert_raises(PG::ConnectionBad, 'must attempt connection to default port') { wire.connection }
       assert_includes(e.message, 'port 5432', 'must default to port 5432 when port is omitted from URL')
+    end
+  end
+
+  def test_honors_url_query_options_in_env
+    fake_config do |f|
+      c = YAML.load_file(f)['pgsql']
+      v = 'DATABASE_URL_QUERY'
+      name = "pgtk_#{SecureRandom.hex(4)}"
+      ENV[v] = [
+        "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}",
+        "@#{CGI.escape(c['host'])}:#{c['port']}/#{CGI.escape(c['dbname'])}",
+        "?application_name=#{name}"
+      ].join
+      actual = Pgtk::Wire::Env.new(v).connection.exec(
+        "SELECT current_setting('application_name')"
+      )[0]['current_setting']
+      assert_equal(name, actual, 'URL query options must be passed through to PG.connect')
     end
   end
 end
