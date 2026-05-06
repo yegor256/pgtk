@@ -395,7 +395,7 @@ class TestPool < Pgtk::Test
 
   def test_validates_stale_connection_before_yielding_to_caller
     fake_config do |f|
-      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, validate_after: 0, log: Loog::NULL)
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, idle: 0, log: Loog::NULL)
       pool.start!
       pool.exec('SELECT 1')
       items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)

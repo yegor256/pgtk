@@ -57,25 +57,25 @@ class Pgtk::Pool
 
   # Constructor.
   #
-  # The +validate_after+ option guards against the cold-slot SSL desync that
-  # bites managed PostgreSQL behind a TLS proxy: a slot sits idle long enough
-  # for the proxy and the client to disagree about SSL state, libpq still
-  # reports +CONNECTION_OK+, and the next real query blows up with a decryption
-  # error. When a slot has been idle longer than +validate_after+ seconds, the
-  # pool runs +SELECT 1+ on it before yielding; if that fails, the slot is
-  # renewed in-line and the caller never sees the error. Set to +nil+ to skip
+  # The +idle+ option guards against the cold-slot SSL desync that bites
+  # managed PostgreSQL behind a TLS proxy: a slot sits idle long enough for
+  # the proxy and the client to disagree about SSL state, libpq still reports
+  # +CONNECTION_OK+, and the next real query blows up with a decryption error.
+  # When a slot has been idle longer than +idle+ seconds, the pool runs
+  # +SELECT 1+ on it before yielding; if that fails, the slot is renewed
+  # in-line and the caller never sees the error. Set to +nil+ to skip
   # validation entirely (e.g. for local Unix-socket PostgreSQL).
   #
   # @param [Pgtk::Wire] wire The wire
   # @param [Integer] max Total amount of PostgreSQL connections in the pool
   # @param [Numeric] timeout Max seconds to wait for a free connection
-  # @param [Numeric, nil] validate_after Seconds of idleness after which to
-  #   validate a connection on checkout, or +nil+ to disable validation
+  # @param [Numeric, nil] idle Seconds of idleness after which to validate
+  #   a connection on checkout, or +nil+ to disable validation
   # @param [Object] log The log
-  def initialize(wire, max: 8, timeout: 1, validate_after: 60, log: Loog::NULL)
+  def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
     @wire = wire
     @max = max
-    @idle = validate_after
+    @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
     @started = false
