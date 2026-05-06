@@ -375,6 +375,24 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_fails_fast_when_start_cannot_heal_a_persistently_broken_pool
+    fake_config do |f|
+      real = Pgtk::Wire::Yaml.new(f)
+      poison = Object.new
+      poison.define_singleton_method(:connection) do
+        conn = real.connection
+        conn.define_singleton_method(:exec) do |*_a, &_b|
+          raise(PG::ConnectionBad, 'persistently broken connection')
+        end
+        conn
+      end
+      pool = Pgtk::Pool.new(poison, max: 1, log: Loog::NULL)
+      assert_raises(PG::ConnectionBad, 'start! must raise when warm-up cannot make a slot healthy') do
+        pool.start!
+      end
+    end
+  end
+
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|

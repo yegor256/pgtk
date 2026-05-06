@@ -100,12 +100,15 @@ class Pgtk::Pool
     @max.times do
       @pool.push(@wire.connection)
     end
-    @started = true
     (2 * @max).times do
       connect { |c| c.exec('SELECT 1') }
     rescue StandardError => e
-      @log.warn("Pool warm-up query failed, slot was renewed: #{e.message.strip}")
+      @log.warn("Pool warm-up query failed, slot will be retried: #{e.message.strip}")
     end
+    @max.times do
+      connect { |c| c.exec('SELECT 1') }
+    end
+    @started = true
     @log.debug("PostgreSQL pool started with #{@max} connections")
   end
 
