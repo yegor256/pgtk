@@ -118,6 +118,22 @@ pgsql = Pgtk::Pool.new(Pgtk::Wire::Yaml.new('config.yml'), max: 5)
 pgsql.start! # Start it with five simultaneous connections
 ```
 
+By default, the pool runs `SELECT 1` on a slot that has been idle for more
+than 60 seconds before yielding it to the caller, and renews the slot in-line
+if that probe fails.
+This guards against managed-PostgreSQL setups behind a TLS-terminating proxy,
+where a cold slot's SSL state can drift out of sync without libpq noticing —
+the next real query then fails with a `decryption failed or bad record mac`
+error.
+You can tune the threshold or disable validation entirely:
+
+```ruby
+# Validate slots idle for more than 30 seconds
+pgsql = Pgtk::Pool.new(wire, max: 5, validate_after: 30)
+# Disable validation (e.g. for local Unix-socket PostgreSQL)
+pgsql = Pgtk::Pool.new(wire, max: 5, validate_after: nil)
+```
+
 You can also let it pick the connection parameters from the environment
 variable `DATABASE_URL`, formatted like
 `postgres://user:password@host:5432/dbname`:
