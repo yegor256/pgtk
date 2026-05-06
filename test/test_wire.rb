@@ -63,4 +63,34 @@ class TestWire < Pgtk::Test
       assert_equal(name, actual, 'URL query options must be passed through to PG.connect')
     end
   end
+
+  def test_forwards_extra_opts_via_direct
+    fake_config do |f|
+      c = YAML.load_file(f)['pgsql']
+      name = "pgtk_#{SecureRandom.hex(4)}"
+      actual = Pgtk::Wire::Direct.new(
+        host: c['host'], port: c['port'], dbname: c['dbname'],
+        user: c['user'], password: c['password'],
+        application_name: name
+      ).connection.exec("SELECT current_setting('application_name')")[0]['current_setting']
+      assert_equal(name, actual, 'extra kwargs on Direct must reach PG.connect')
+    end
+  end
+
+  def test_explicit_kwargs_win_over_url_query
+    fake_config do |f|
+      c = YAML.load_file(f)['pgsql']
+      v = 'DATABASE_URL_PRECEDENCE'
+      ENV[v] = [
+        "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}",
+        "@#{CGI.escape(c['host'])}:#{c['port']}/#{CGI.escape(c['dbname'])}",
+        '?application_name=from_url'
+      ].join
+      explicit = "pgtk_#{SecureRandom.hex(4)}"
+      actual = Pgtk::Wire::Env.new(v, application_name: explicit).connection.exec(
+        "SELECT current_setting('application_name')"
+      )[0]['current_setting']
+      assert_equal(explicit, actual, 'explicit kwargs must override URL query options on conflict')
+    end
+  end
 end
