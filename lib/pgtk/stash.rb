@@ -222,7 +222,8 @@ class Pgtk::Stash
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     @entrance.with_write_lock do
       affected.each do |t|
-        @stash[:table_mod][t] = now
+        old = @stash[:table_mod][t]
+        @stash[:table_mod][t] = old && old > now ? old : now
         @stash[:tables][t]&.each do |q|
           @stash[:queries][q]&.each_key do |key|
             @stash[:queries][q][key][:stale] = now
@@ -237,18 +238,17 @@ class Pgtk::Stash
     key = params.join(SEPARATOR)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-      mark = @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(/(?<=^|\s)(?:FROM|JOIN) ([a-z_]+)(?=\s|;|$)/).flatten
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, params, result, ret, mark, tables, marks) unless pure.include?(' NOW() ')
+      cache(pure, key, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
   end
 
-  def cache(pure, key, params, result, ret, mark, tables, marks)
+  def cache(pure, key, params, result, ret, tables, marks)
     raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
     @entrance.with_write_lock do
       tables.each do |t|
@@ -257,10 +257,15 @@ class Pgtk::Stash
       end
       @stash[:queries][pure] ||= {}
       existing = @stash[:queries][pure][key]
-      stale = existing && existing[:stale]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
       entry = { ret:, params:, result:, used: Time.now }
-      entry[:stale] = stale == mark ? Time.now : stale if (stale && stale != mark) || stillborn
+      entry[:stale] =
+        if existing && existing[:stale]
+          existing[:stale]
+        elsif stillborn
+          Time.now
+        end
+      entry.delete(:stale) if entry[:stale].nil?
       @stash[:queries][pure][key] = entry
     end
   end

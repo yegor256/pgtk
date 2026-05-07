@@ -444,6 +444,29 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_list_query_converges_to_db_after_writer_churn
+    fake_pool(8) do |pool|
+      pool.exec('CREATE TABLE node (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
+      stash = Pgtk::Stash.new(pool, refill: 0.3, delay: 4, capping: 5, retirement: 5, retire: 600)
+      stash.start!
+      hammer(stash, 16, 2, 4, 10)
+      sleep(stash.instance_variable_get(:@refill) + stash.instance_variable_get(:@delay) + 2)
+      assert_empty(ghosts(stash, pool), 'list query keeps returning ghost ids whose rows no longer exist in DB')
+    end
+  end
+
+  def test_select_does_not_clear_stale_marker_on_cached_entry
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      stash.exec('SELECT title FROM book')
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+      stash.exec('SELECT title FROM book')
+      entry = stash.instance_variable_get(:@stash)[:queries]['SELECT title FROM book'].values.first
+      refute_nil(entry[:stale], 'cache must not clear the stale marker; only replenish should clear it')
+    end
+  end
+
   def test_cascade_delete_invalidates_child_table_cache
     fake_pool do |pool|
       pool.exec('CREATE TABLE org (id INTEGER PRIMARY KEY)')
@@ -515,5 +538,11 @@ class TestStash < Pgtk::Test
       end
     end
     bugs
+  end
+
+  def ghosts(stash, pool)
+    truth = pool.exec('SELECT id FROM node').map { |r| Integer(r['id'], 10) }
+    listed = stash.exec('SELECT id FROM node ORDER BY id').map { |r| Integer(r['id'], 10) }
+    listed - truth
   end
 end
