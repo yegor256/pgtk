@@ -223,10 +223,11 @@ class Pgtk::Stash
     @entrance.with_write_lock do
       affected.each do |t|
         old = @stash[:table_mod][t]
-        @stash[:table_mod][t] = old && old > now ? old : now
+        stamp = old && old > now ? old : now
+        @stash[:table_mod][t] = stamp
         @stash[:tables][t]&.each do |q|
           @stash[:queries][q]&.each_key do |key|
-            @stash[:queries][q][key][:stale] = now
+            @stash[:queries][q][key][:stale] = stamp
           end
         end
       end
