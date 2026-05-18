@@ -69,7 +69,7 @@ GEM
     nokogiri (1.19.3-x86_64-linux-musl)
       racc (~> 1.4)
     os (1.1.4)
-    parallel (2.0.1)
+    parallel (2.1.0)
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
@@ -108,7 +108,7 @@ GEM
     rubocop-ast (1.49.1)
       parser (>= 3.3.7.2)
       prism (~> 1.7)
-    rubocop-elegant (0.0.20)
+    rubocop-elegant (0.4.0)
       lint_roller (~> 1.1)
       rubocop (~> 1.75)
     rubocop-minitest (0.39.1)
