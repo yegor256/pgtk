@@ -127,14 +127,15 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     password = yml['pgsql']['password']
     host = yml.dig('pgsql', 'host')
     Dir.chdir(File.dirname(@schema)) do
-      out =
+      File.write(
+        @schema,
         if (local && @docker != :always) || @docker == :never
           pgdump(yml, host, password)
         else
           host = donce_host if OS.mac? && ['localhost', '127.0.0.1'].include?(host)
           dockerdump(yml, host, password)
         end
-      File.write(@schema, out)
+      )
     end
   end
 

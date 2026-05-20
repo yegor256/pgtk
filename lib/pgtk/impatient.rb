@@ -58,9 +58,6 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Impatient
-  # If timed out
-  class TooSlow < StandardError; end
-
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
@@ -118,14 +115,16 @@ class Pgtk::Impatient
         t.exec(sql, *args)
       end
     rescue PG::QueryCanceled
-      raise(TooSlow, [
-        'SQL query',
-        ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
-        'was terminated after',
-        start.ago,
-        'of waiting:',
-        sql.ellipsized(50).inspect
-      ].compact.join(' '))
+      raise(
+        TooSlow, [
+          'SQL query',
+          ("with #{args.count} argument#{'s' if args.count > 1}" unless args.empty?),
+          'was terminated after',
+          start.ago,
+          'of waiting:',
+          sql.ellipsized(50).inspect
+        ].compact.join(' ')
+      )
     end
   end
 
@@ -146,3 +145,5 @@ class Pgtk::Impatient
     end
   end
 end
+
+require_relative 'impatient/too_slow'

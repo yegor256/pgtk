@@ -50,11 +50,6 @@ require_relative 'wire'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Pool
-  # Raised when no connection becomes available from the pool within
-  # the configured timeout. Indicates that all connections are currently
-  # taken by other threads and none was returned in time.
-  class Busy < StandardError; end
-
   # Constructor.
   #
   # The +idle+ option guards against the cold-slot SSL desync that bites
@@ -198,9 +193,8 @@ class Pgtk::Pool
       t = Txn.new(c, @log)
       t.exec('START TRANSACTION')
       begin
-        r = yield(t)
         t.exec('COMMIT')
-        r
+        yield(t)
       ensure
         if c.transaction_status != PG::Constants::PQTRANS_IDLE
           begin
@@ -210,124 +204,6 @@ class Pgtk::Pool
           end
         end
       end
-    end
-  end
-
-  # Thread-safe queue implementation that supports iteration.
-  # Unlike Ruby's Queue class, this implementation allows safe iteration
-  # over all elements while maintaining thread safety for concurrent access.
-  #
-  # This class is used internally by Pool to store database connections
-  # and provide the ability to iterate over them for inspection purposes.
-  #
-  # The queue is bounded by size. When an item is taken out, it remains in
-  # the internal array but is marked as "taken". When returned, it's placed
-  # back in its original slot and marked as available.
-  class IterableQueue
-    def initialize(size, timeout)
-      @size = size
-      @timeout = timeout
-      @items = []
-      @taken = []
-      @free = []
-      @mutex = Mutex.new
-      @condition = ConditionVariable.new
-    end
-
-    def push(item)
-      @mutex.synchronize do
-        if @items.size < @size
-          @items << item
-          @taken << false
-          @free << (@items.size - 1)
-        else
-          index = @items.index(item)
-          if index.nil?
-            index = @taken.index(true)
-            raise(StandardError, 'No taken slot found') if index.nil?
-            @items[index] = item
-          end
-          @taken[index] = false
-          @free << index
-        end
-        @condition.signal
-      end
-    end
-
-    def pop
-      @mutex.synchronize do
-        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
-        while @free.empty?
-          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          raise(Busy, "No free connection appeared in the pool after #{@timeout}s of waiting") if remaining <= 0
-          @condition.wait(@mutex, remaining)
-        end
-        index = @free.shift
-        @taken[index] = true
-        @items[index]
-      end
-    end
-
-    def size
-      @mutex.synchronize do
-        @items.size
-      end
-    end
-
-    def map(&)
-      @mutex.synchronize do
-        @items.map(&)
-      end
-    end
-  end
-
-  # A temporary class to execute a single SQL request.
-  class Txn
-    def initialize(conn, log)
-      @conn = conn
-      @log = log
-    end
-
-    # Exec a single parameterized command.
-    # @param [String] query The SQL query with params inside (possibly)
-    # @param [Array] args List of arguments
-    # @param [Integer] result Should be 0 for text results, 1 for binary
-    # @yield [Hash] Rows
-    def exec(query, args = [], result = 0)
-      start = Time.now
-      sql = query.is_a?(Array) ? query.join(' ') : query
-      @conn.instance_variable_set(:@pgtk_last_query, sql)
-      @conn.instance_variable_set(:@pgtk_started_at, start)
-      begin
-        out =
-          if args.empty?
-            @conn.exec(sql) do |res|
-              if block_given?
-                yield(res)
-              else
-                res.each.to_a
-              end
-            end
-          else
-            @conn.exec_params(sql, args, result) do |res|
-              if block_given?
-                yield(res)
-              else
-                res.each.to_a
-              end
-            end
-          end
-      rescue StandardError => e
-        @log.error("#{sql} -> #{e.message}")
-        raise(e)
-      end
-      lag = Time.now - start
-      if lag < 1
-        @log.debug("#{sql} >> #{start.ago} / #{@conn.object_id}")
-      else
-        @log.info("#{sql} >> #{start.ago}")
-      end
-      out
     end
   end
 
@@ -371,9 +247,9 @@ class Pgtk::Pool
   end
 
   def stale(conn)
-    return nil if @idle.nil?
+    return if @idle.nil?
     last = conn.instance_variable_get(:@pgtk_last_used)
-    return nil if last.nil? || Time.now - last < @idle
+    return if last.nil? || Time.now - last < @idle
     begin
       conn.exec('SELECT 1')
       nil
@@ -383,19 +259,23 @@ class Pgtk::Pool
   end
 
   def info(conn)
-    pipelines = { PG::Constants::PQ_PIPELINE_ON => 'ON', PG::Constants::PQ_PIPELINE_OFF => 'OFF',
-                  PG::Constants::PQ_PIPELINE_ABORTED => 'ABORTED' }
-    statuses = { PG::Constants::CONNECTION_OK => 'OK', PG::Constants::CONNECTION_BAD => 'BAD' }
-    transactions = { PG::Constants::PQTRANS_IDLE => 'IDLE', PG::Constants::PQTRANS_ACTIVE => 'ACTIVE',
-                     PG::Constants::PQTRANS_INTRANS => 'INTRANS', PG::Constants::PQTRANS_INERROR => 'INERROR',
-                     PG::Constants::PQTRANS_UNKNOWN => 'UNKNOWN' }
     conn.instance_variable_set(:@pgtk_pid, conn.backend_pid)
     parts = [
       '    ',
       "##{conn.backend_pid}",
-      pipelines.fetch(conn.pipeline_status, "pipeline_status=#{conn.pipeline_status}"),
-      statuses.fetch(conn.status, "status=#{conn.status}"),
-      transactions.fetch(conn.transaction_status, "transaction_status=#{conn.transaction_status}")
+      {
+        PG::Constants::PQ_PIPELINE_ON => 'ON', PG::Constants::PQ_PIPELINE_OFF => 'OFF',
+        PG::Constants::PQ_PIPELINE_ABORTED => 'ABORTED'
+      }.fetch(conn.pipeline_status, "pipeline_status=#{conn.pipeline_status}"),
+      { PG::Constants::CONNECTION_OK => 'OK', PG::Constants::CONNECTION_BAD => 'BAD' }.fetch(
+        conn.status,
+        "status=#{conn.status}"
+      ),
+      {
+        PG::Constants::PQTRANS_IDLE => 'IDLE', PG::Constants::PQTRANS_ACTIVE => 'ACTIVE',
+        PG::Constants::PQTRANS_INTRANS => 'INTRANS', PG::Constants::PQTRANS_INERROR => 'INERROR',
+        PG::Constants::PQTRANS_UNKNOWN => 'UNKNOWN'
+      }.fetch(conn.transaction_status, "transaction_status=#{conn.transaction_status}")
     ]
     if conn.transaction_status != PG::Constants::PQTRANS_IDLE
       started = conn.instance_variable_get(:@pgtk_started_at)
@@ -434,3 +314,7 @@ class Pgtk::Pool
     @wire.connection
   end
 end
+
+require_relative 'pool/busy'
+require_relative 'pool/iterable_queue'
+require_relative 'pool/txn'

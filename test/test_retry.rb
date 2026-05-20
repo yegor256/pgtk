@@ -21,15 +21,13 @@ require_relative 'test__helper'
 class TestRetry < Pgtk::Test
   def test_takes_version
     fake_pool do |pool|
-      v = Pgtk::Retry.new(pool).version
-      refute_nil(v)
+      refute_nil(Pgtk::Retry.new(pool).version)
     end
   end
 
   def test_dumps_inner_state
     fake_pool do |pool|
-      t = Pgtk::Retry.new(pool).dump
-      refute_nil(t)
+      refute_nil(Pgtk::Retry.new(pool).dump)
     end
   end
 
@@ -37,8 +35,7 @@ class TestRetry < Pgtk::Test
     fake_pool do |pool|
       r = Pgtk::Retry.new(pool, attempts: 3)
       r.start!
-      result = r.exec('SELECT 1 as value')
-      assert_equal('1', result.first['value'])
+      assert_equal('1', r.exec('SELECT 1 as value').first['value'])
     end
   end
 
@@ -54,9 +51,7 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 3
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec('SELECT 2 as num')
-      assert_equal('2', result.first['num'])
+      assert_equal('2', Pgtk::Retry.new(stub, attempts: 3).exec('SELECT 2 as num').first['num'])
       assert_equal(3, counter)
     end
   end
@@ -149,9 +144,7 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 2
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec('  SELECT 3 as value')
-      assert_equal('3', result.first['value'])
+      assert_equal('3', Pgtk::Retry.new(stub, attempts: 3).exec('  SELECT 3 as value').first['value'])
       assert_equal(2, counter)
     end
   end
@@ -168,9 +161,7 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 2
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec('select 4 as value')
-      assert_equal('4', result.first['value'])
+      assert_equal('4', Pgtk::Retry.new(stub, attempts: 3).exec('select 4 as value').first['value'])
       assert_equal(2, counter)
     end
   end
@@ -187,9 +178,7 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 2
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec(%w[SELECT 5 as value])
-      assert_equal('5', result.first['value'])
+      assert_equal('5', Pgtk::Retry.new(stub, attempts: 3).exec(%w[SELECT 5 as value]).first['value'])
       assert_equal(2, counter)
     end
   end
@@ -198,8 +187,12 @@ class TestRetry < Pgtk::Test
     fake_pool do |pool|
       retrier = Pgtk::Retry.new(pool)
       retrier.transaction do |t|
-        id = Integer(t.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Transaction Book']).first['id'], 10)
-        assert_predicate(id, :positive?)
+        assert_predicate(
+          Integer(
+            t.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Transaction Book']).first['id'],
+            10
+          ), :positive?
+        )
       end
     end
   end
@@ -214,11 +207,13 @@ class TestRetry < Pgtk::Test
         raise(ArgumentError, 'Invalid argument')
       end
       retrier = Pgtk::Retry.new(stub, attempts: 2)
-      e =
+      assert_kind_of(
+        ArgumentError,
         assert_raises(Pgtk::Retry::Exhausted) do
           retrier.exec('SELECT * FROM table')
-        end
-      assert_kind_of(ArgumentError, e.cause, 'original ArgumentError must be preserved as cause')
+        end.cause,
+        'original ArgumentError must be preserved as cause'
+      )
     end
   end
 
@@ -234,9 +229,7 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 2
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      result = retrier.exec('SELECT \'привет\' as greeting')
-      assert_equal('привет', result.first['greeting'])
+      assert_equal('привет', Pgtk::Retry.new(stub, attempts: 3).exec('SELECT \'привет\' as greeting').first['greeting'])
       assert_equal(2, counter)
     end
   end
@@ -253,8 +246,7 @@ class TestRetry < Pgtk::Test
         raise(Pgtk::Impatient::TooSlow, 'query terminated') if counter < 2
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('SELECT 7 as value')
+      Pgtk::Retry.new(stub, attempts: 3).exec('SELECT 7 as value')
       assert_equal(2, counter, 'select must be retried on Impatient::TooSlow')
     end
   end
@@ -271,8 +263,7 @@ class TestRetry < Pgtk::Test
         raise(Pgtk::Impatient::TooSlow, 'query terminated') if counter < 3
         pool.exec(sql, *args)
       end
-      retrier = Pgtk::Retry.new(stub, attempts: 3)
-      retrier.exec('SELECT * FROM book WHERE title = $1', ['Slow Test'])
+      Pgtk::Retry.new(stub, attempts: 3).exec('SELECT * FROM book WHERE title = $1', ['Slow Test'])
       assert_equal(3, counter, 'SELECT must be retried on Impatient::TooSlow')
     end
   end

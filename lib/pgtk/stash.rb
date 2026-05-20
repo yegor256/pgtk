@@ -108,8 +108,7 @@ class Pgtk::Stash
   # @return [String] Multi-line text representation of the current cache state
   def dump
     @entrance.with_read_lock do
-      qq = queries
-      body(qq)
+      body(queries)
     end
   end
 
@@ -221,7 +220,6 @@ class Pgtk::Stash
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten
     tables.uniq!
-    ret = @pool.exec(pure, params, result)
     now = Time.now
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     @entrance.with_write_lock do
@@ -236,7 +234,7 @@ class Pgtk::Stash
         end
       end
     end
-    ret
+    @pool.exec(pure, params, result)
   end
 
   def select(pure, params, result)
@@ -294,8 +292,6 @@ class Pgtk::Stash
 
   # Discover ON DELETE CASCADE / ON UPDATE CASCADE foreign keys so that a
   # modify on the parent table also invalidates cached queries on children.
-  #
-  # @return [nil]
   def cascade!
     direct = Hash.new { |h, k| h[k] = [] }
     @pool.exec(<<~SQL).each { |r| direct[r['parent']] << r['child'] }
@@ -312,7 +308,6 @@ class Pgtk::Stash
         AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
     SQL
     @cascades = direct.keys.to_h { |p| [p, transitive(p, direct, []).uniq] }
-    nil
   end
 
   def transitive(parent, direct, seen)

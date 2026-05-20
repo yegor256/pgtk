@@ -34,9 +34,8 @@ class HookedPool
   end
 
   def exec(query, params = [], result = 0)
-    ret = @pool.exec(query, params, result)
     @hook.call(query)
-    ret
+    @pool.exec(query, params, result)
   end
 end
 
@@ -47,11 +46,14 @@ end
 class TestStash < Pgtk::Test
   def test_simple_insert
     fake_pool do |pool|
-      id = Integer(Pgtk::Stash.new(pool).exec(
-        'INSERT INTO book (title) VALUES ($1) RETURNING id',
-        ['Elegant Objects']
-      )[0]['id'], 10)
-      assert_predicate(id, :positive?)
+      assert_predicate(
+        Integer(
+          Pgtk::Stash.new(pool).exec(
+            'INSERT INTO book (title) VALUES ($1) RETURNING id',
+            ['Elegant Objects']
+          )[0]['id'], 10
+        ), :positive?
+      )
     end
   end
 
@@ -89,45 +91,46 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT count(*) FROM book'
-      first = stash.exec(query)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
-      second = stash.exec(query)
-      refute_same(first, second)
+      refute_same(stash.exec(query), stash.exec(query))
     end
   end
 
-  def test_invalidates_cache_for_table_whose_name_has_underscores
+  def test_invalidates_cache_for_underscored_table
     fake_pool do |pool|
       pool.exec('CREATE TABLE user_settings (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT value FROM user_settings WHERE id = $1'
-      first = stash.exec(query, [1])
       stash.exec('INSERT INTO user_settings (id, value) VALUES ($1, $2)', [1, 'x'])
-      second = stash.exec(query, [1])
-      refute_same(first, second, 'cannot invalidate cache for a write into a table whose name has an underscore')
+      refute_same(
+        stash.exec(query, [1]), stash.exec(query, [1]),
+        'cannot invalidate cache for a write into a table whose name has an underscore'
+      )
     end
   end
 
-  def test_invalidates_cache_for_table_whose_name_has_digits
+  def test_invalidates_cache_for_digited_table
     fake_pool do |pool|
       pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
-      first = stash.exec(query, [1])
       stash.exec('INSERT INTO audit_log_2024 (id, msg) VALUES ($1, $2)', [1, 'x'])
-      second = stash.exec(query, [1])
-      refute_same(first, second, 'cannot invalidate cache for a write into a table whose name has a digit')
+      refute_same(
+        stash.exec(query, [1]), stash.exec(query, [1]),
+        'cannot invalidate cache for a write into a table whose name has a digit'
+      )
     end
   end
 
-  def test_caches_select_from_table_whose_name_has_digits
+  def test_caches_select_from_digited_table
     fake_pool do |pool|
       pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
-      first = stash.exec(query, [1])
-      second = stash.exec(query, [1])
-      assert_same(first, second, 'cannot cache a SELECT from a table whose name has a digit')
+      assert_same(
+        stash.exec(query, [1]), stash.exec(query, [1]),
+        'cannot cache a SELECT from a table whose name has a digit'
+      )
     end
   end
 
@@ -139,8 +142,7 @@ class TestStash < Pgtk::Test
       second = stash.exec(query, ['Elegant Objects'])
       assert_equal(first.to_a, second.to_a)
       assert_same(first, second)
-      different = stash.exec(query, ['Different Title'])
-      refute_same(first, different)
+      refute_same(first, stash.exec(query, ['Different Title']))
     end
   end
 
@@ -162,8 +164,7 @@ class TestStash < Pgtk::Test
 
   def test_version
     fake_pool do |pool|
-      stash = Pgtk::Stash.new(pool)
-      assert_match(/^\d+\.\d+/, stash.version)
+      assert_match(/^\d+\.\d+/, Pgtk::Stash.new(pool).version)
     end
   end
 
@@ -172,8 +173,10 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Transaction Test'])
       stash.transaction do |tx|
-        result = tx.exec('SELECT title FROM book WHERE title = $1', ['Transaction Test'])
-        assert_equal('Transaction Test', result[0]['title'])
+        assert_equal(
+          'Transaction Test',
+          tx.exec('SELECT title FROM book WHERE title = $1', ['Transaction Test'])[0]['title']
+        )
         true
       end
     end
@@ -184,8 +187,7 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Start Test'])
       stash.start!
-      result = stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])
-      assert_equal('Start Test', result[0]['title'])
+      assert_equal('Start Test', stash.exec('SELECT title FROM book WHERE title = $1', ['Start Test'])[0]['title'])
     end
   end
 
@@ -298,7 +300,7 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_capper_prunes_dead_query_references_from_tables_index
+  def test_capper_prunes_tables_index
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, cap: 1, capping: 0.1, refill: nil, retirement: nil)
       stash.start!
@@ -307,21 +309,24 @@ class TestStash < Pgtk::Test
       stash.exec('SELECT title FROM book')
       sleep(0.4)
       inner = stash.instance_variable_get(:@stash)
-      live = inner[:queries].keys.sort
-      refs = (inner[:tables]['book'] || []).sort
-      assert_equal(live, refs, 'tables index must drop query strings evicted by the cap')
+      assert_equal(
+        inner[:queries].keys.sort, (inner[:tables]['book'] || []).sort,
+        'tables index must drop query strings evicted by the cap'
+      )
     end
   end
 
-  def test_retiree_prunes_dead_query_references_from_tables_index
+  def test_retiree_prunes_tables_index
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, retire: 0.1, retirement: 0.1, refill: nil, capping: nil)
       stash.start!
       stash.exec('SELECT id FROM book')
       stash.exec('SELECT title FROM book')
       sleep(0.5)
-      inner = stash.instance_variable_get(:@stash)
-      assert_empty(inner[:tables], 'tables index must drop query strings retired from cache')
+      assert_empty(
+        stash.instance_variable_get(:@stash)[:tables],
+        'tables index must drop query strings retired from cache'
+      )
     end
   end
 
@@ -341,8 +346,7 @@ class TestStash < Pgtk::Test
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['Test'])
       stash.exec('SELECT  title  FROM    book  WHERE id = $1', [1])
-      result = stash.dump
-      assert_includes(result, 'queries in cache')
+      assert_includes(stash.dump, 'queries in cache')
     end
   end
 
@@ -355,40 +359,51 @@ class TestStash < Pgtk::Test
   #      sleep 2
   #      # ...
   #   end
-  def test_preserves_stale_marker_set_during_concurrent_refill
+  def test_preserves_stale_marker_on_refill
     fake_pool do |real_pool|
       deleted = false
       triggered = false
       stash = nil
-      hook =
-        lambda do |q|
-          next unless deleted && !triggered && q.start_with?('SELECT')
-          triggered = true
-          stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
-        end
-      stash = Pgtk::Stash.new(HookedPool.new(real_pool, hook))
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next unless deleted && !triggered && q.start_with?('SELECT')
+            triggered = true
+            stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+          end
+        )
+      )
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
       stash.exec('SELECT title FROM book')
       stash.exec('DELETE FROM book WHERE title = $1', ['A'])
       deleted = true
       stash.exec('SELECT title FROM book')
-      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
-      assert_includes(titles, 'B', 'cannot see row inserted during a concurrent stash refill')
+      assert_includes(
+        stash.exec('SELECT title FROM book').to_a.map do |r|
+          r['title']
+        end, 'B', 'cannot see row inserted during a concurrent stash refill'
+      )
     end
   end
 
-  def test_refill_does_not_overwrite_fresh_cache_with_stale_snapshot
+  def test_refill_does_not_clobber_fresh_cache
     fake_pool do |real_pool|
       gate = Concurrent::Event.new
       release = Concurrent::Event.new
       armed = Concurrent::AtomicBoolean.new(false)
-      hooked = HookedPool.new(real_pool, lambda do |q|
-        next unless armed.value && q.include?('SELECT title FROM book')
-        armed.make_false
-        gate.set
-        release.wait(10)
-      end)
-      stash = Pgtk::Stash.new(hooked, refill: nil, capping: nil, retirement: nil, delay: 0)
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next unless armed.value && q.include?('SELECT title FROM book')
+            armed.make_false
+            gate.set
+            release.wait(10)
+          end
+        ),
+        refill: nil, capping: nil, retirement: nil, delay: 0
+      )
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
       stash.exec('SELECT title FROM book')
@@ -403,30 +418,39 @@ class TestStash < Pgtk::Test
       tpool = stash.instance_variable_get(:@tpool)
       tpool.shutdown
       tpool.wait_for_termination(10)
-      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
-      assert_includes(titles, 'B', 'refill task clobbered fresh cache with its stale snapshot')
+      assert_includes(
+        stash.exec('SELECT title FROM book').to_a.map do |r|
+          r['title']
+        end, 'B', 'refill task clobbered fresh cache with its stale snapshot'
+      )
     end
   end
 
-  def test_cold_miss_marks_entry_stale_when_modify_races
+  def test_cold_miss_marks_stale_on_race
     fake_pool do |real_pool|
       triggered = false
       stash = nil
-      hook =
-        lambda do |q|
-          next if triggered
-          next unless q.start_with?('SELECT title FROM book')
-          triggered = true
-          stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
-        end
-      stash = Pgtk::Stash.new(HookedPool.new(real_pool, hook))
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next if triggered
+            next unless q.start_with?('SELECT title FROM book')
+            triggered = true
+            stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+          end
+        )
+      )
       stash.exec('SELECT title FROM book')
-      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
-      assert_includes(titles, 'B', 'cannot see row inserted during a cold-miss SELECT')
+      assert_includes(
+        stash.exec('SELECT title FROM book').to_a.map do |r|
+          r['title']
+        end, 'B', 'cannot see row inserted during a cold-miss SELECT'
+      )
     end
   end
 
-  def test_replenish_survives_eviction_during_keys_snapshot
+  def test_replenish_survives_eviction
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil, delay: 0)
       stash.start!
@@ -451,7 +475,7 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_capture_entrance_in_stash_iterators_with_multithreading
+  def test_concurrent_stash_iteration_is_safe
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, threads: 1, refill: 1)
       stash.start!
@@ -468,7 +492,7 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_per_id_select_stays_consistent_under_writer_churn
+  def test_select_stays_consistent_under_writers
     fake_pool(8) do |pool|
       pool.exec('CREATE TABLE node (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool, refill: 0.3, delay: 4, capping: 5, retirement: 5, retire: 600)
@@ -479,7 +503,7 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_list_query_converges_to_db_after_writer_churn
+  def test_list_query_converges_after_writers
     fake_pool(8) do |pool|
       pool.exec('CREATE TABLE node (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool, refill: 0.3, delay: 4, capping: 5, retirement: 5, retire: 600)
@@ -490,19 +514,21 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_select_does_not_clear_stale_marker_on_cached_entry
+  def test_select_does_not_clear_stale_marker
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
       stash.exec('SELECT title FROM book')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
       stash.exec('SELECT title FROM book')
-      entry = stash.instance_variable_get(:@stash)[:queries]['SELECT title FROM book'].values.first
-      refute_nil(entry[:stale], 'cache must not clear the stale marker; only replenish should clear it')
+      refute_nil(
+        stash.instance_variable_get(:@stash)[:queries]['SELECT title FROM book'].values.first[:stale],
+        'cache must not clear the stale marker; only replenish should clear it'
+      )
     end
   end
 
-  def test_cascade_delete_invalidates_child_table_cache
+  def test_cascade_delete_invalidates_child_cache
     fake_pool do |pool|
       pool.exec('CREATE TABLE org (id INTEGER PRIMARY KEY)')
       pool.exec(<<~SQL)
@@ -518,8 +544,10 @@ class TestStash < Pgtk::Test
       stash.exec('INSERT INTO node (id, org_id, ip) VALUES ($1, $2, $3)', [42, 1, '10.0.0.1'])
       stash.exec('SELECT ip FROM node WHERE id = $1', [42])
       stash.exec('DELETE FROM org WHERE id = $1', [1])
-      ip = stash.exec('SELECT ip FROM node WHERE id = $1', [42]).first
-      assert_nil(ip, 'cannot serve cached node row after parent org was cascade-deleted')
+      assert_nil(
+        stash.exec('SELECT ip FROM node WHERE id = $1', [42]).first,
+        'cannot serve cached node row after parent org was cascade-deleted'
+      )
     end
   end
 
@@ -528,12 +556,13 @@ class TestStash < Pgtk::Test
   def hammer(stash, count, writers, readers, seconds)
     stop = Concurrent::AtomicBoolean.new(false)
     crashes = Concurrent::Array.new
-    threads =
+    (
       Array.new(writers) { Thread.new { spam(stash, count, stop, crashes) } } +
       Array.new(readers) { Thread.new { scan(stash, stop, crashes) } }
-    sleep(seconds)
-    stop.make_true
-    threads.each(&:join)
+    ).tap do
+      sleep(seconds)
+      stop.make_true
+    end.each(&:join)
     assert_empty(crashes, "thread crashed: #{crashes.first}")
   end
 
@@ -576,8 +605,10 @@ class TestStash < Pgtk::Test
   end
 
   def ghosts(stash, pool)
-    truth = pool.exec('SELECT id FROM node').map { |r| Integer(r['id'], 10) }
-    listed = stash.exec('SELECT id FROM node ORDER BY id').map { |r| Integer(r['id'], 10) }
-    listed - truth
+    stash.exec('SELECT id FROM node ORDER BY id').map do |r|
+      Integer(r['id'], 10)
+    end - pool.exec('SELECT id FROM node').map do |r|
+      Integer(r['id'], 10)
+    end
   end
 end

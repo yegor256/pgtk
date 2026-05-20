@@ -51,17 +51,14 @@ class Pgtk::PgsqlTask < Rake::TaskLib
 
   def run
     local = detect(:local)
-    docker = detect(:docker)
-    preflight(local, docker)
+    preflight(local, detect(:docker))
     home = File.expand_path(@dir)
     FileUtils.rm_rf(home) if @fresh
     raise(ArgumentError, "Directory/file #{home} is present, use fresh=true") if File.exist?(home)
-    stdout = @quiet ? nil : $stdout
     port = acquire
-    place = launch(local, home, stdout, port)
     save(port)
     return if @quiet
-    puts("PostgreSQL has been started #{place}, port #{port}")
+    puts("PostgreSQL has been started #{launch(local, home, (@quiet ? nil : $stdout), port)}, port #{port}")
     puts("YAML config saved to #{@yaml}")
   end
 
@@ -87,11 +84,9 @@ class Pgtk::PgsqlTask < Rake::TaskLib
 
   def launch(local, home, stdout, port)
     if (local && @docker != :always) || @docker == :never
-      pid = localize(home, stdout, port)
-      "in process ##{pid}"
+      "in process ##{localize(home, stdout, port)}"
     else
-      container = dockerize(home, stdout, port)
-      "in container #{container}"
+      "in container #{dockerize(home, stdout, port)}"
     end
   end
 
@@ -122,21 +117,19 @@ class Pgtk::PgsqlTask < Rake::TaskLib
 
   def dockerize(home, stdout, port)
     FileUtils.mkdir_p(home)
-    out =
-      qbash(
-        'docker',
-        'run',
-        "--publish #{Shellwords.escape("#{port}:5432")}",
-        "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
-        "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
-        "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
-        '--detach',
-        '--rm',
-        'postgres:18.1',
-        @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
-        stdout:
-      )
-    container = out.scan(/[a-f0-9]+\Z/).first
+    container = qbash(
+      'docker',
+      'run',
+      "--publish #{Shellwords.escape("#{port}:5432")}",
+      "-e POSTGRES_USER=#{Shellwords.escape(@user)}",
+      "-e POSTGRES_PASSWORD=#{Shellwords.escape(@password)}",
+      "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
+      '--detach',
+      '--rm',
+      'postgres:18.1',
+      @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
+      stdout:
+    ).scan(/[a-f0-9]+\Z/).first
     File.write(File.join(home, 'docker-container'), container)
     at_exit do
       if qbash(

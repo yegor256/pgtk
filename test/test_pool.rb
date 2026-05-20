@@ -32,8 +32,7 @@ class TestPool < Pgtk::Test
 
   def test_dumps_itself
     fake_pool do |pool|
-      t = pool.dump
-      assert_includes(t, pool.version)
+      assert_includes(pool.dump, pool.version)
     end
   end
 
@@ -59,8 +58,12 @@ class TestPool < Pgtk::Test
 
   def test_basic
     fake_pool do |pool|
-      id = Integer(pool.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Elegant Objects'])[0]['id'], 10)
-      assert_predicate(id, :positive?)
+      assert_predicate(
+        Integer(
+          pool.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['Elegant Objects'])[0]['id'],
+          10
+        ), :positive?
+      )
     end
   end
 
@@ -145,12 +148,13 @@ class TestPool < Pgtk::Test
 
   def test_transaction
     fake_pool do |pool|
-      id =
+      assert_predicate(
         Pgtk::Spy.new(pool).transaction do |t|
           t.exec('DELETE FROM book')
           Integer(t.exec(['INSERT INTO book (title)', 'VALUES ($1) RETURNING id'], ['Object Thinking'])[0]['id'], 10)
-        end
-      assert_predicate(id, :positive?)
+        end,
+        :positive?
+      )
     end
   end
 
@@ -181,18 +185,17 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def test_raises_busy_when_no_connection_appears_in_time
+  def test_raises_busy_on_connection_timeout
     fake_config do |f|
       pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, timeout: 0.1, log: Loog::NULL)
       pool.start!
-      holder = Thread.new { pool.exec('SELECT pg_sleep(1)') }
       sleep(0.2)
       assert_raises(Pgtk::Pool::Busy) { pool.exec('SELECT 1') }
-      holder.join
+      Thread.new { pool.exec('SELECT pg_sleep(1)') }.join
     end
   end
 
-  def test_renews_connections_left_in_failed_transaction
+  def test_renews_connection_after_failed_txn
     fake_pool(2) do |pool|
       pool.exec('SELECT 1')
       queue = pool.instance_variable_get(:@pool)
@@ -212,7 +215,7 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def test_rolls_back_transaction_on_non_standard_error
+  def test_rolls_back_on_non_standard_error
     fake_pool do |pool|
       pool.exec('DELETE FROM book')
       assert_raises(SystemExit) do
@@ -228,8 +231,7 @@ class TestPool < Pgtk::Test
   def test_dumps_closed_connection_with_timestamp
     fake_pool(2) do |pool|
       pool.version
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      pool.__send__(:renew, items.first, 'some reason')
+      pool.__send__(:renew, pool.instance_variable_get(:@pool).instance_variable_get(:@items).first, 'some reason')
       assert_match(/connection is closed,\s+\S+ ago/, pool.dump, 'dump must include time since connection was closed')
     end
   end
@@ -237,8 +239,10 @@ class TestPool < Pgtk::Test
   def test_dumps_closed_connection_with_reason
     fake_pool(2) do |pool|
       pool.version
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      pool.__send__(:renew, items.first, 'forced shutdown by test')
+      pool.__send__(
+        :renew, pool.instance_variable_get(:@pool).instance_variable_get(:@items).first,
+        'forced shutdown by test'
+      )
       assert_match(/because: forced shutdown by test/, pool.dump, 'dump must include reason for closing')
     end
   end
@@ -258,8 +262,7 @@ class TestPool < Pgtk::Test
   def test_dumps_running_query_for_active_connection
     fake_pool(2) do |pool|
       pool.version
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      conn = items.first
+      conn = pool.instance_variable_get(:@pool).instance_variable_get(:@items).first
       conn.instance_variable_set(:@pgtk_last_query, 'SELECT pg_sleep(1)')
       conn.send_query('SELECT pg_sleep(1)')
       begin
@@ -275,8 +278,7 @@ class TestPool < Pgtk::Test
   def test_ellipsizes_long_running_query_in_dump
     fake_pool(2) do |pool|
       pool.version
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      conn = items.first
+      conn = pool.instance_variable_get(:@pool).instance_variable_get(:@items).first
       long = "SELECT pg_sleep(1) /* #{'x' * 200} */"
       conn.instance_variable_set(:@pgtk_last_query, long)
       conn.send_query(long)
@@ -302,7 +304,7 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def test_does_not_double_login_when_proactive_renew_fails
+  def test_no_double_login_on_renew_failure
     fake_pool(1) do |pool|
       pool.exec('SELECT 1')
       queue = pool.instance_variable_get(:@pool)
@@ -323,12 +325,11 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def test_does_not_leak_slots_when_proactive_renew_fails
+  def test_no_slot_leak_on_renew_failure
     fake_pool(2) do |pool|
       pool.exec('SELECT 1')
       queue = pool.instance_variable_get(:@pool)
       queue.map { |c| c.close unless c.finished? }
-      original = pool.instance_variable_get(:@wire)
       broken = Object.new
       broken.define_singleton_method(:connection) do
         raise(PG::ConnectionBad, 'simulated outage during proactive renew')
@@ -339,14 +340,16 @@ class TestPool < Pgtk::Test
       rescue StandardError
         nil
       end
-      taken = queue.instance_variable_get(:@taken)
-      refute_includes(taken, true, 'pool slots must not leak when proactive renew raises')
-      pool.instance_variable_set(:@wire, original)
+      refute_includes(
+        queue.instance_variable_get(:@taken), true,
+        'pool slots must not leak when proactive renew raises'
+      )
+      pool.instance_variable_set(:@wire, pool.instance_variable_get(:@wire))
       assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
     end
   end
 
-  def test_validates_each_connection_during_start_to_replace_born_sick_slots
+  def test_validates_slots_during_start
     fake_config do |f|
       real = Pgtk::Wire::Yaml.new(f)
       calls = 0
@@ -363,19 +366,19 @@ class TestPool < Pgtk::Test
       end
       pool = Pgtk::Pool.new(flaky, max: 2, log: Loog::NULL)
       pool.start!
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      ok =
-        items.all? do |c|
+      assert(
+        pool.instance_variable_get(:@pool).instance_variable_get(:@items).all? do |c|
           c.exec('SELECT 1')
           true
         rescue StandardError
           false
-        end
-      assert(ok, 'start! must validate each pool slot so born-sick connections never linger')
+        end,
+        'start! must validate each pool slot so born-sick connections never linger'
+      )
     end
   end
 
-  def test_fails_fast_when_start_cannot_heal_a_persistently_broken_pool
+  def test_start_fails_on_broken_pool
     fake_config do |f|
       real = Pgtk::Wire::Yaml.new(f)
       poison = Object.new
@@ -393,13 +396,12 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def test_validates_stale_connection_before_yielding_to_caller
+  def test_validates_stale_connection_on_checkout
     fake_config do |f|
       pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, idle: 0, log: Loog::NULL)
       pool.start!
       pool.exec('SELECT 1')
-      items = pool.instance_variable_get(:@pool).instance_variable_get(:@items)
-      bad = items.first
+      bad = pool.instance_variable_get(:@pool).instance_variable_get(:@items).first
       bad.define_singleton_method(:exec) do |*_a, &_b|
         raise(PG::ConnectionBad, 'SSL error: decryption failed or bad record mac')
       end
@@ -413,8 +415,7 @@ class TestPool < Pgtk::Test
   def test_reconnects_on_pg_reboot
     port = RandomPort::Pool::SINGLETON.acquire
     Dir.mktmpdir do |dir|
-      id = rand(100..999)
-      task = fake_pgsql(dir, id, port)
+      task = fake_pgsql(dir, rand(100..999), port)
       pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(File.join(dir, 'cfg.yml')), max: 1, log: Loog::NULL)
       spin(50) { pool.start! }
       pool.exec('SELECT * FROM pg_catalog.pg_tables')

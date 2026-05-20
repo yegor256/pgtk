@@ -49,11 +49,6 @@ require_relative 'impatient'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Retry
-  # Raised when all retry attempts have been exhausted. The original
-  # exception that caused the last failure is available via #cause,
-  # so its message and stack trace are preserved for debugging.
-  class Exhausted < StandardError; end
-
   BACKOFFS = [0.05, 0.2, 1.0].freeze
 
   # Constructor.
@@ -122,3 +117,5 @@ class Pgtk::Retry
     @pool.transaction(&)
   end
 end
+
+require_relative 'retry/exhausted'

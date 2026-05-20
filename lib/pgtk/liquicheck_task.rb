@@ -110,8 +110,7 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
   def confirm(prop, regex, msg)
     raise(MustError, msg) unless prop.match?(regex)
   end
-
-  class MustError < StandardError
-  end
-  private_constant :MustError
 end
+
+require_relative 'liquicheck_task/must_error'
+Pgtk::LiquicheckTask.__send__(:private_constant, :MustError)

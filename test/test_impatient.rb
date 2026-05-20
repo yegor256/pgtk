@@ -22,15 +22,13 @@ require_relative 'test__helper'
 class TestImpatient < Pgtk::Test
   def test_takes_version
     fake_pool do |pool|
-      v = Pgtk::Impatient.new(pool, 1).version
-      refute_nil(v)
+      refute_nil(Pgtk::Impatient.new(pool, 1).version)
     end
   end
 
   def test_dumps_inner_state
     fake_pool do |pool|
-      t = Pgtk::Impatient.new(pool, 1).dump
-      refute_nil(t)
+      refute_nil(Pgtk::Impatient.new(pool, 1).dump)
     end
   end
 
@@ -65,19 +63,23 @@ class TestImpatient < Pgtk::Test
 
   def test_doesnt_interrupt
     fake_pool do |pool|
-      id = Integer(Pgtk::Impatient.new(pool, 1).exec(
-        'INSERT INTO book (title) VALUES ($1) RETURNING id',
-        ['1984']
-      ).first['id'], 10)
-      assert_predicate(id, :positive?)
+      assert_predicate(
+        Integer(
+          Pgtk::Impatient.new(pool, 1).exec(
+            'INSERT INTO book (title) VALUES ($1) RETURNING id',
+            ['1984']
+          ).first['id'], 10
+        ), :positive?
+      )
     end
   end
 
   def test_doesnt_interrupt_in_transaction
     fake_pool do |pool|
       Pgtk::Impatient.new(pool, 1).transaction do |t|
-        id = Integer(t.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['1984']).first['id'], 10)
-        assert_predicate(id, :positive?)
+        assert_predicate(
+          Integer(t.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['1984']).first['id'], 10), :positive?
+        )
       end
     end
   end
@@ -94,11 +96,10 @@ class TestImpatient < Pgtk::Test
     end
   end
 
-  def test_applies_server_side_statement_timeout_per_query
+  def test_sets_server_side_timeout_per_query
     fake_pool do |pool|
       captured = []
-      spy = Pgtk::Spy.new(pool) { |sql, _| captured << sql }
-      Pgtk::Impatient.new(spy, 1.5).exec('SELECT 1')
+      Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5).exec('SELECT 1')
       assert(
         captured.any? { |s| s.match?(/SET LOCAL statement_timeout\s*=\s*\d+/) },
         "must set statement_timeout per query, got: #{captured.inspect}"
@@ -106,11 +107,10 @@ class TestImpatient < Pgtk::Test
     end
   end
 
-  def test_does_not_apply_server_side_timeout_for_excluded_queries
+  def test_skips_timeout_for_excluded_queries
     fake_pool do |pool|
       captured = []
-      spy = Pgtk::Spy.new(pool) { |sql, _| captured << sql }
-      Pgtk::Impatient.new(spy, 1.5, /^SELECT 1/).exec('SELECT 1')
+      Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5, /^SELECT 1/).exec('SELECT 1')
       refute(
         captured.any? { |s| s.include?('SET LOCAL statement_timeout') },
         "must not set statement_timeout for excluded queries, got: #{captured.inspect}"

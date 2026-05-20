@@ -66,11 +66,12 @@ class TestLiquibaseTask < Pgtk::Test
       t.yaml = { 'pgsql' => {} }
       t.quiet = true
     end
-    ex =
+    assert_includes(
       assert_raises(StandardError) do
         Rake::Task['lb'].invoke
-      end
-    assert_includes(ex.message, 'the-file-doesnt-exist.xml')
+      end.message,
+      'the-file-doesnt-exist.xml'
+    )
   end
 
   def test_schema_dump

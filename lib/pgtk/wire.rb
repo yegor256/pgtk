@@ -3,10 +3,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
-require 'cgi'
-require 'pg'
-require 'uri'
-require 'yaml'
 require_relative '../pgtk'
 
 # Wires.
@@ -14,103 +10,8 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 module Pgtk::Wire
-  # Simple wire with details.
-  # Author:: Yegor Bugayenko (yegor256@gmail.com)
-  # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
-  # License:: MIT
-  class Direct
-    # Constructor.
-    #
-    # @param [String] host Host name of the PostgreSQL server
-    # @param [Integer] port Port number of the PostgreSQL server
-    # @param [String] dbname Database name
-    # @param [String] user Username
-    # @param [String] password Password
-    # @param [Hash] opts Extra options forwarded to +PG.connect+ (e.g. +sslmode+,
-    #   +connect_timeout+, +keepalives+, +keepalives_idle+, +application_name+)
-    def initialize(host:, port:, dbname:, user:, password:, **opts)
-      raise(ArgumentError, "The host can't be nil") if host.nil?
-      @host = host
-      raise(ArgumentError, "The port can't be nil") if port.nil?
-      @port = port
-      @dbname = dbname
-      @user = user
-      @password = password
-      @opts = opts
-    end
-
-    # Create a new connection to PostgreSQL server.
-    def connection
-      PG.connect(dbname: @dbname, host: @host, port: @port, user: @user, password: @password, **@opts)
-    end
-  end
-
-  # Using ENV variable.
-  #
-  # The value of the variable should be in this format:
-  #
-  #   postgres://user:password@host:port/dbname
-  #
-  # Author:: Yegor Bugayenko (yegor256@gmail.com)
-  # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
-  # License:: MIT
-  class Env
-    # Constructor.
-    #
-    # @param [String] var The name of the environment variable with the connection URL
-    # @param [Hash] opts Extra options forwarded to +PG.connect+ (e.g. +sslmode+,
-    #   +connect_timeout+, +keepalives+, +keepalives_idle+, +application_name+).
-    #   Explicit kwargs win over options carried in the URL query string on conflict.
-    def initialize(var = 'DATABASE_URL', **opts)
-      raise(ArgumentError, "The name of the environment variable can't be nil") if var.nil?
-      @value = ENV.fetch(var, nil)
-      raise(ArgumentError, "The environment variable #{@value.inspect} is not set") if @value.nil?
-      @opts = opts
-    end
-
-    # Create a new connection to PostgreSQL server.
-    def connection
-      uri = URI(@value)
-      extras = uri.query ? URI.decode_www_form(uri.query).to_h.transform_keys(&:to_sym) : {}
-      Pgtk::Wire::Direct.new(
-        host: CGI.unescape(uri.host),
-        port: uri.port || 5432,
-        dbname: CGI.unescape(uri.path[1..]),
-        user: CGI.unescape(uri.userinfo.split(':')[0]),
-        password: CGI.unescape(uri.userinfo.split(':')[1]),
-        **extras.merge(@opts)
-      ).connection
-    end
-  end
-
-  # Using configuration from YAML file.
-  # Author:: Yegor Bugayenko (yegor256@gmail.com)
-  # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
-  # License:: MIT
-  class Yaml
-    # Constructor.
-    #
-    # @param [String] file Path to the YAML configuration file
-    # @param [String] node The root node name in the YAML file containing PostgreSQL configuration
-    def initialize(file, node = 'pgsql')
-      raise(ArgumentError, "The name of the file can't be nil") if file.nil?
-      @file = file
-      raise(ArgumentError, "The name of the node in the YAML file can't be nil") if node.nil?
-      @node = node
-    end
-
-    # Create a new connection to PostgreSQL server.
-    def connection
-      raise(ArgumentError, "The file #{@file.inspect} not found") unless File.exist?(@file)
-      cfg = YAML.load_file(@file)
-      raise(ArgumentError, "The node '#{@node}' not found in YAML file #{@file.inspect}") unless cfg[@node]
-      Pgtk::Wire::Direct.new(
-        host: cfg[@node]['host'],
-        port: cfg[@node]['port'],
-        dbname: cfg[@node]['dbname'],
-        user: cfg[@node]['user'],
-        password: cfg[@node]['password']
-      ).connection
-    end
-  end
 end
+
+require_relative 'wire/direct'
+require_relative 'wire/env'
+require_relative 'wire/yaml'
