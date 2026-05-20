@@ -410,18 +410,18 @@ class TestStash < Pgtk::Test
 
   def test_refill_does_not_clear_stale_when_concurrent_modify_in_flight
     fake_pool do |real_pool|
-      select_done = Concurrent::Event.new
-      modify_committed = Concurrent::Event.new
-      refill_done = Concurrent::Event.new
+      selected = Concurrent::Event.new
+      committed = Concurrent::Event.new
+      applied = Concurrent::Event.new
       armed = Concurrent::AtomicBoolean.new(false)
       hooked = HookedPool.new(real_pool, lambda do |q|
         next unless armed.value
         if q.include?('SELECT title FROM book')
-          select_done.set
-          modify_committed.wait(10)
+          selected.set
+          raise(Timeout::Error, 'modify never committed') unless committed.wait(10)
         elsif q.start_with?('INSERT INTO book')
-          modify_committed.set
-          refill_done.wait(10)
+          committed.set
+          raise(Timeout::Error, 'refill never finished') unless applied.wait(10)
         end
       end)
       stash = Pgtk::Stash.new(hooked, refill: nil, capping: nil, retirement: nil, delay: 0)
@@ -430,18 +430,19 @@ class TestStash < Pgtk::Test
       stash.exec('SELECT title FROM book')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
       armed.make_true
-      modify_thread = Thread.new do
-        select_done.wait(10)
-        stash.exec('INSERT INTO book (title) VALUES ($1)', ['C'])
-      end
+      writer =
+        Thread.new do
+          raise(Timeout::Error, 'refill SELECT never reached PG') unless selected.wait(10)
+          stash.exec('INSERT INTO book (title) VALUES ($1)', ['C'])
+        end
       stash.__send__(:replenish, 'SELECT title FROM book')
       tpool = stash.instance_variable_get(:@tpool)
       tpool.shutdown
       tpool.wait_for_termination(10)
       armed.make_false
       titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
-      refill_done.set
-      modify_thread.join
+      applied.set
+      writer.join
       assert_includes(titles, 'C', 'refill task cleared :stale with pre-commit data while a modify was in flight')
     end
   end

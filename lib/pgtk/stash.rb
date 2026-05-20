@@ -394,16 +394,18 @@ class Pgtk::Stash
   def replenish(query)
     tables = query.scan(READS_RE).flatten
     tables.uniq!
+    pinned = nil
     snapshot =
       @entrance.with_read_lock do
+        pinned = tables.to_h { |t| [t, @stash[:table_mod][t]] }
         @stash[:queries][query]&.filter_map do |k, h|
           next unless h[:stale]
           next if h[:stale] > Time.now - @delay
-          [k, h[:params], h[:result], h[:stale], tables.to_h { |t| [t, @stash[:table_mod][t]] }]
+          [k, h[:params], h[:result], h[:stale]]
         end
       end
     return unless snapshot
-    snapshot.each do |k, params, result, mark, table_marks|
+    snapshot.each do |k, params, result, mark|
       next if @tpool.queue_length >= @maxqueue
       @tpool.post do
         ret = @pool.exec(query, params, result)
@@ -411,7 +413,7 @@ class Pgtk::Stash
           h = @stash[:queries][query]&.dig(k)
           next unless h
           next unless h[:stale] == mark
-          next if table_marks.any? { |t, m| @stash[:table_mod][t] != m }
+          next if pinned.any? { |t, m| @stash[:table_mod][t] != m }
           next if tables.any? { |t| (@stash[:table_inflight][t] || 0).positive? }
           h[:ret] = ret
           h.delete(:stale)
