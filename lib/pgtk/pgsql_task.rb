@@ -56,9 +56,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
     FileUtils.rm_rf(home) if @fresh
     raise(ArgumentError, "Directory/file #{home} is present, use fresh=true") if File.exist?(home)
     port = acquire
+    place = launch(local, home, @quiet ? nil : $stdout, port)
     save(port)
     return if @quiet
-    puts("PostgreSQL has been started #{launch(local, home, (@quiet ? nil : $stdout), port)}, port #{port}")
+    puts("PostgreSQL has been started #{place}, port #{port}")
     puts("YAML config saved to #{@yaml}")
   end
 
