@@ -96,6 +96,41 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_cache_for_table_whose_name_has_underscores
+    fake_pool do |pool|
+      pool.exec('CREATE TABLE user_settings (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
+      stash = Pgtk::Stash.new(pool)
+      query = 'SELECT value FROM user_settings WHERE id = $1'
+      first = stash.exec(query, [1])
+      stash.exec('INSERT INTO user_settings (id, value) VALUES ($1, $2)', [1, 'x'])
+      second = stash.exec(query, [1])
+      refute_same(first, second, 'cannot invalidate cache for a write into a table whose name has an underscore')
+    end
+  end
+
+  def test_invalidates_cache_for_table_whose_name_has_digits
+    fake_pool do |pool|
+      pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
+      stash = Pgtk::Stash.new(pool)
+      query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
+      first = stash.exec(query, [1])
+      stash.exec('INSERT INTO audit_log_2024 (id, msg) VALUES ($1, $2)', [1, 'x'])
+      second = stash.exec(query, [1])
+      refute_same(first, second, 'cannot invalidate cache for a write into a table whose name has a digit')
+    end
+  end
+
+  def test_caches_select_from_table_whose_name_has_digits
+    fake_pool do |pool|
+      pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
+      stash = Pgtk::Stash.new(pool)
+      query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
+      first = stash.exec(query, [1])
+      second = stash.exec(query, [1])
+      assert_same(first, second, 'cannot cache a SELECT from a table whose name has a digit')
+    end
+  end
+
   def test_caching_with_params
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
