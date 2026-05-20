@@ -408,6 +408,45 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_refill_does_not_clear_stale_when_concurrent_modify_in_flight
+    fake_pool do |real_pool|
+      selected = Concurrent::Event.new
+      committed = Concurrent::Event.new
+      applied = Concurrent::Event.new
+      armed = Concurrent::AtomicBoolean.new(false)
+      hooked = HookedPool.new(real_pool, lambda do |q|
+        next unless armed.value
+        if q.include?('SELECT title FROM book')
+          selected.set
+          raise(Timeout::Error, 'modify never committed') unless committed.wait(10)
+        elsif q.start_with?('INSERT INTO book')
+          committed.set
+          raise(Timeout::Error, 'refill never finished') unless applied.wait(10)
+        end
+      end)
+      stash = Pgtk::Stash.new(hooked, refill: nil, capping: nil, retirement: nil, delay: 0)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      stash.exec('SELECT title FROM book')
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+      armed.make_true
+      writer =
+        Thread.new do
+          raise(Timeout::Error, 'refill SELECT never reached PG') unless selected.wait(10)
+          stash.exec('INSERT INTO book (title) VALUES ($1)', ['C'])
+        end
+      stash.__send__(:replenish, 'SELECT title FROM book')
+      tpool = stash.instance_variable_get(:@tpool)
+      tpool.shutdown
+      tpool.wait_for_termination(10)
+      armed.make_false
+      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
+      applied.set
+      writer.join
+      assert_includes(titles, 'C', 'refill task cleared :stale with pre-commit data while a modify was in flight')
+    end
+  end
+
   def test_cold_miss_marks_entry_stale_when_modify_races
     fake_pool do |real_pool|
       triggered = false

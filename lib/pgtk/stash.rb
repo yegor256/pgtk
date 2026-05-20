@@ -61,7 +61,7 @@ class Pgtk::Stash
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
   def initialize(
     pool,
-    stash: { queries: {}, tables: {}, table_mod: {} },
+    stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     refill: 16,
@@ -76,6 +76,7 @@ class Pgtk::Stash
     @pool = pool
     @stash = stash
     @stash[:table_mod] ||= {}
+    @stash[:table_inflight] ||= {}
     @loog = loog
     @entrance = entrance
     @refill = refill
@@ -221,22 +222,33 @@ class Pgtk::Stash
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten
     tables.uniq!
-    ret = @pool.exec(pure, params, result)
-    now = Time.now
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     @entrance.with_write_lock do
-      affected.each do |t|
-        old = @stash[:table_mod][t]
-        stamp = old && old > now ? old : now
-        @stash[:table_mod][t] = stamp
-        @stash[:tables][t]&.each do |q|
-          @stash[:queries][q]&.each_key do |key|
-            @stash[:queries][q][key][:stale] = stamp
+      affected.each { |t| @stash[:table_inflight][t] = (@stash[:table_inflight][t] || 0) + 1 }
+    end
+    begin
+      ret = @pool.exec(pure, params, result)
+      now = Time.now
+      @entrance.with_write_lock do
+        affected.each do |t|
+          @stash[:table_inflight][t] -= 1
+          old = @stash[:table_mod][t]
+          stamp = old && old > now ? old : now
+          @stash[:table_mod][t] = stamp
+          @stash[:tables][t]&.each do |q|
+            @stash[:queries][q]&.each_key do |key|
+              @stash[:queries][q][key][:stale] = stamp
+            end
           end
         end
       end
+      ret
+    rescue StandardError
+      @entrance.with_write_lock do
+        affected.each { |t| @stash[:table_inflight][t] -= 1 }
+      end
+      raise
     end
-    ret
   end
 
   def select(pure, params, result)
@@ -380,8 +392,12 @@ class Pgtk::Stash
   end
 
   def replenish(query)
+    tables = query.scan(READS_RE).flatten
+    tables.uniq!
+    pinned = nil
     snapshot =
       @entrance.with_read_lock do
+        pinned = tables.to_h { |t| [t, @stash[:table_mod][t]] }
         @stash[:queries][query]&.filter_map do |k, h|
           next unless h[:stale]
           next if h[:stale] > Time.now - @delay
@@ -396,10 +412,11 @@ class Pgtk::Stash
         @entrance.with_write_lock do
           h = @stash[:queries][query]&.dig(k)
           next unless h
-          if h[:stale] == mark
-            h[:ret] = ret
-            h.delete(:stale)
-          end
+          next unless h[:stale] == mark
+          next if pinned.any? { |t, m| @stash[:table_mod][t] != m }
+          next if tables.any? { |t| (@stash[:table_inflight][t] || 0).positive? }
+          h[:ret] = ret
+          h.delete(:stale)
         end
       end
     end

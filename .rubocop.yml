@@ -15,3 +15,9 @@ plugins:
   - rubocop-minitest
   - rubocop-performance
   - rubocop-elegant
+Metrics/ClassLength:
+  Max: 320
+Metrics/CyclomaticComplexity:
+  Max: 20
+Metrics/PerceivedComplexity:
+  Max: 20
