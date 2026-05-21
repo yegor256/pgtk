@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../../pgtk'
-require_relative '../retry'
+
+class Pgtk::Retry; end
 
 # Raised when all retry attempts have been exhausted. The original
 # exception that caused the last failure is available via #cause,

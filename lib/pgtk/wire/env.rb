@@ -6,8 +6,9 @@
 require 'cgi'
 require 'uri'
 require_relative '../../pgtk'
-require_relative '../wire'
 require_relative 'direct'
+
+module Pgtk::Wire; end
 
 # Using ENV variable.
 #

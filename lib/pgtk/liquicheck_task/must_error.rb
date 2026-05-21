@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../../pgtk'
-require_relative '../liquicheck_task'
+
+class Pgtk::LiquicheckTask; end
 
 # Internal error raised by Pgtk::LiquicheckTask validation helpers and
 # captured per-file by the +on+ helper to accumulate readable diagnostics.

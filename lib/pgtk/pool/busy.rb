@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../../pgtk'
-require_relative '../pool'
+
+class Pgtk::Pool; end
 
 # Raised when no connection becomes available from the pool within
 # the configured timeout. Indicates that all connections are currently

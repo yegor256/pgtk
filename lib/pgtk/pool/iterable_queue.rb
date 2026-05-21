@@ -4,8 +4,9 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../../pgtk'
-require_relative '../pool'
 require_relative 'busy'
+
+class Pgtk::Pool; end
 
 # Thread-safe queue implementation that supports iteration.
 # Unlike Ruby's Queue class, this implementation allows safe iteration

@@ -5,7 +5,8 @@
 
 require 'tago'
 require_relative '../../pgtk'
-require_relative '../pool'
+
+class Pgtk::Pool; end
 
 # A temporary class to execute a single SQL request.
 #

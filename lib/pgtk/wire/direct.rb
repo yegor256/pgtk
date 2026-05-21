@@ -5,7 +5,8 @@
 
 require 'pg'
 require_relative '../../pgtk'
-require_relative '../wire'
+
+module Pgtk::Wire; end
 
 # Simple wire with details.
 #

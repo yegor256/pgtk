@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 require_relative '../../pgtk'
-require_relative '../impatient'
+
+class Pgtk::Impatient; end
 
 # Raised by Pgtk::Impatient#exec when the query takes longer than the
 # configured timeout. The deadline is enforced server-side via

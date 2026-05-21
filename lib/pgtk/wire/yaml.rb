@@ -5,8 +5,9 @@
 
 require 'yaml'
 require_relative '../../pgtk'
-require_relative '../wire'
 require_relative 'direct'
+
+module Pgtk::Wire; end
 
 # Using configuration from YAML file.
 #
