@@ -193,8 +193,7 @@ class Pgtk::Pool
       t = Txn.new(c, @log)
       t.exec('START TRANSACTION')
       begin
-        t.exec('COMMIT')
-        yield(t)
+        yield(t).tap { t.exec('COMMIT') }
       ensure
         if c.transaction_status != PG::Constants::PQTRANS_IDLE
           begin

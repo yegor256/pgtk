@@ -113,4 +113,3 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
 end
 
 require_relative 'liquicheck_task/must_error'
-Pgtk::LiquicheckTask.__send__(:private_constant, :MustError)

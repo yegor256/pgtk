@@ -226,22 +226,22 @@ class Pgtk::Stash
       affected.each { |t| @stash[:table_inflight][t] = (@stash[:table_inflight][t] || 0) + 1 }
     end
     begin
-      ret = @pool.exec(pure, params, result)
-      now = Time.now
-      @entrance.with_write_lock do
-        affected.each do |t|
-          @stash[:table_inflight][t] -= 1
-          old = @stash[:table_mod][t]
-          stamp = old && old > now ? old : now
-          @stash[:table_mod][t] = stamp
-          @stash[:tables][t]&.each do |q|
-            @stash[:queries][q]&.each_key do |key|
-              @stash[:queries][q][key][:stale] = stamp
+      @pool.exec(pure, params, result).tap do
+        now = Time.now
+        @entrance.with_write_lock do
+          affected.each do |t|
+            @stash[:table_inflight][t] -= 1
+            old = @stash[:table_mod][t]
+            stamp = old && old > now ? old : now
+            @stash[:table_mod][t] = stamp
+            @stash[:tables][t]&.each do |q|
+              @stash[:queries][q]&.each_key do |key|
+                @stash[:queries][q][key][:stale] = stamp
+              end
             end
           end
         end
       end
-      ret
     rescue StandardError
       @entrance.with_write_lock do
         affected.each { |t| @stash[:table_inflight][t] -= 1 }

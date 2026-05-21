@@ -34,8 +34,7 @@ class HookedPool
   end
 
   def exec(query, params = [], result = 0)
-    @hook.call(query)
-    @pool.exec(query, params, result)
+    @pool.exec(query, params, result).tap { @hook.call(query) }
   end
 end
 
@@ -91,8 +90,10 @@ class TestStash < Pgtk::Test
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT count(*) FROM book'
-      stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
-      refute_same(stash.exec(query), stash.exec(query))
+      stash.exec(query).then do |first|
+        stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
+        refute_same(first, stash.exec(query))
+      end
     end
   end
 
@@ -101,11 +102,13 @@ class TestStash < Pgtk::Test
       pool.exec('CREATE TABLE user_settings (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT value FROM user_settings WHERE id = $1'
-      stash.exec('INSERT INTO user_settings (id, value) VALUES ($1, $2)', [1, 'x'])
-      refute_same(
-        stash.exec(query, [1]), stash.exec(query, [1]),
-        'cannot invalidate cache for a write into a table whose name has an underscore'
-      )
+      stash.exec(query, [1]).then do |first|
+        stash.exec('INSERT INTO user_settings (id, value) VALUES ($1, $2)', [1, 'x'])
+        refute_same(
+          first, stash.exec(query, [1]),
+          'cannot invalidate cache for a write into a table whose name has an underscore'
+        )
+      end
     end
   end
 
@@ -114,11 +117,13 @@ class TestStash < Pgtk::Test
       pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
-      stash.exec('INSERT INTO audit_log_2024 (id, msg) VALUES ($1, $2)', [1, 'x'])
-      refute_same(
-        stash.exec(query, [1]), stash.exec(query, [1]),
-        'cannot invalidate cache for a write into a table whose name has a digit'
-      )
+      stash.exec(query, [1]).then do |first|
+        stash.exec('INSERT INTO audit_log_2024 (id, msg) VALUES ($1, $2)', [1, 'x'])
+        refute_same(
+          first, stash.exec(query, [1]),
+          'cannot invalidate cache for a write into a table whose name has a digit'
+        )
+      end
     end
   end
 
@@ -432,36 +437,41 @@ class TestStash < Pgtk::Test
       committed = Concurrent::Event.new
       applied = Concurrent::Event.new
       armed = Concurrent::AtomicBoolean.new(false)
-      hooked = HookedPool.new(real_pool, lambda do |q|
-        next unless armed.value
-        if q.include?('SELECT title FROM book')
-          selected.set
-          raise(Timeout::Error, 'modify never committed') unless committed.wait(10)
-        elsif q.start_with?('INSERT INTO book')
-          committed.set
-          raise(Timeout::Error, 'refill never finished') unless applied.wait(10)
-        end
-      end)
-      stash = Pgtk::Stash.new(hooked, refill: nil, capping: nil, retirement: nil, delay: 0)
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next unless armed.value
+            if q.include?('SELECT title FROM book')
+              selected.set
+              raise(Timeout::Error, 'modify never committed') unless committed.wait(10)
+            elsif q.start_with?('INSERT INTO book')
+              committed.set
+              raise(Timeout::Error, 'refill never finished') unless applied.wait(10)
+            end
+          end
+        ),
+        refill: nil, capping: nil, retirement: nil, delay: 0
+      )
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
       stash.exec('SELECT title FROM book')
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
       armed.make_true
-      writer =
-        Thread.new do
-          raise(Timeout::Error, 'refill SELECT never reached PG') unless selected.wait(10)
-          stash.exec('INSERT INTO book (title) VALUES ($1)', ['C'])
-        end
-      stash.__send__(:replenish, 'SELECT title FROM book')
-      tpool = stash.instance_variable_get(:@tpool)
-      tpool.shutdown
-      tpool.wait_for_termination(10)
-      armed.make_false
-      titles = stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }
-      applied.set
-      writer.join
-      assert_includes(titles, 'C', 'refill task cleared :stale with pre-commit data while a modify was in flight')
+      Thread.new do
+        raise(Timeout::Error, 'refill SELECT never reached PG') unless selected.wait(10)
+        stash.exec('INSERT INTO book (title) VALUES ($1)', ['C'])
+      end.tap do
+        stash.__send__(:replenish, 'SELECT title FROM book')
+        tpool = stash.instance_variable_get(:@tpool)
+        tpool.shutdown
+        tpool.wait_for_termination(10)
+        armed.make_false
+        assert_includes(
+          stash.exec('SELECT title FROM book').to_a.map { |r| r['title'] }.tap { applied.set },
+          'C', 'refill task cleared :stale with pre-commit data while a modify was in flight'
+        )
+      end.join
     end
   end
 

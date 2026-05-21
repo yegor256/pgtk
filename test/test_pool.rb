@@ -189,9 +189,10 @@ class TestPool < Pgtk::Test
     fake_config do |f|
       pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 1, timeout: 0.1, log: Loog::NULL)
       pool.start!
-      sleep(0.2)
-      assert_raises(Pgtk::Pool::Busy) { pool.exec('SELECT 1') }
-      Thread.new { pool.exec('SELECT pg_sleep(1)') }.join
+      Thread.new { pool.exec('SELECT pg_sleep(1)') }.tap do
+        sleep(0.2)
+        assert_raises(Pgtk::Pool::Busy) { pool.exec('SELECT 1') }
+      end.join
     end
   end
 
@@ -330,21 +331,23 @@ class TestPool < Pgtk::Test
       pool.exec('SELECT 1')
       queue = pool.instance_variable_get(:@pool)
       queue.map { |c| c.close unless c.finished? }
-      broken = Object.new
-      broken.define_singleton_method(:connection) do
-        raise(PG::ConnectionBad, 'simulated outage during proactive renew')
+      pool.instance_variable_get(:@wire).then do |original|
+        broken = Object.new
+        broken.define_singleton_method(:connection) do
+          raise(PG::ConnectionBad, 'simulated outage during proactive renew')
+        end
+        pool.instance_variable_set(:@wire, broken)
+        4.times do
+          pool.exec('SELECT 1')
+        rescue StandardError
+          nil
+        end
+        refute_includes(
+          queue.instance_variable_get(:@taken), true,
+          'pool slots must not leak when proactive renew raises'
+        )
+        pool.instance_variable_set(:@wire, original)
       end
-      pool.instance_variable_set(:@wire, broken)
-      4.times do
-        pool.exec('SELECT 1')
-      rescue StandardError
-        nil
-      end
-      refute_includes(
-        queue.instance_variable_get(:@taken), true,
-        'pool slots must not leak when proactive renew raises'
-      )
-      pool.instance_variable_set(:@wire, pool.instance_variable_get(:@wire))
       assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
     end
   end
