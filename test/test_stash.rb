@@ -499,6 +499,37 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_two_writes_same_tick_marks_cache_stillborn
+    fake_pool do |real_pool|
+      triggered = false
+      stash = nil
+      frozen = Time.now
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next if triggered
+            next unless q.start_with?('SELECT title FROM book')
+            triggered = true
+            stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+          end
+        ),
+        refill: nil, capping: nil, retirement: nil
+      )
+      Time.stub(:now, frozen) do
+        stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      end
+      Time.stub(:now, frozen) do
+        stash.exec('SELECT title FROM book')
+      end
+      assert_includes(
+        stash.exec('SELECT title FROM book').map { |r| r['title'] },
+        'B',
+        'must detect stillborn cache when two writes share the same clock tick'
+      )
+    end
+  end
+
   def test_replenish_survives_eviction
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil, delay: 0)
