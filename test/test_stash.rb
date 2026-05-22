@@ -511,9 +511,7 @@ class TestStash < Pgtk::Test
             next if triggered
             next unless q.start_with?('SELECT title FROM book')
             triggered = true
-            Time.stub(:now, frozen) do
-              stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
-            end
+            stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
           end
         ),
         refill: nil, capping: nil, retirement: nil
