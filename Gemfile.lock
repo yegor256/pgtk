@@ -147,7 +147,7 @@ GEM
       nokogiri (~> 1.8)
       rainbow (~> 3.0)
       slop (~> 4.4)
-    yard (0.9.43)
+    yard (0.9.44)
 
 PLATFORMS
   aarch64-linux
