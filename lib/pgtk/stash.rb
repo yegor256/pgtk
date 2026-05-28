@@ -231,12 +231,10 @@ class Pgtk::Stash
         @entrance.with_write_lock do
           affected.each do |t|
             @stash[:table_inflight][t] -= 1
-            old = @stash[:table_mod][t]
-            stamp = old && old > now ? old : now
-            @stash[:table_mod][t] = stamp
+            @stash[:table_mod][t] = (@stash[:table_mod][t] || 0) + 1
             @stash[:tables][t]&.each do |q|
               @stash[:queries][q]&.each_key do |key|
-                @stash[:queries][q][key][:stale] = stamp
+                @stash[:queries][q][key][:stale] = now
               end
             end
           end
