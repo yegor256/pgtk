@@ -339,41 +339,59 @@ class Pgtk::Stash
 
   def capper!
     Concurrent::TimerTask.execute(execution_interval: @capping, executor: @tpool) do
-      loop do
-        break if cached <= @cap
-        @entrance.with_write_lock do
-          @stash[:queries].each_key do |q|
-            m = @stash[:queries][q].values.map { |h| h[:used] }.min
-            next unless m
-            @stash[:queries][q].delete_if { |_, h| h[:used] == m }
-            evict(q) if @stash[:queries][q].empty?
-          end
-        end
-      end
+      capper_run
+    rescue StandardError => e
+      @loog.warn("Stash capper crashed: #{e.class}: #{e.message}")
     end
   end
 
   def retiree!
     Concurrent::TimerTask.execute(execution_interval: @retirement, executor: @tpool) do
+      retiree_run
+    rescue StandardError => e
+      @loog.warn("Stash retiree crashed: #{e.class}: #{e.message}")
+    end
+  end
+
+  def refiller!
+    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
+      refiller_run
+    rescue StandardError => e
+      @loog.warn("Stash refiller crashed: #{e.class}: #{e.message}")
+    end
+  end
+
+  def capper_run
+    loop do
+      break if cached <= @cap
       @entrance.with_write_lock do
         @stash[:queries].each_key do |q|
-          @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
+          m = @stash[:queries][q].values.map { |h| h[:used] }.min
+          next unless m
+          @stash[:queries][q].delete_if { |_, h| h[:used] == m }
           evict(q) if @stash[:queries][q].empty?
         end
       end
     end
   end
 
+  def retiree_run
+    @entrance.with_write_lock do
+      @stash[:queries].each_key do |q|
+        @stash[:queries][q].delete_if { |_, h| h[:used] < Time.now - @retire }
+        evict(q) if @stash[:queries][q].empty?
+      end
+    end
+  end
+
+  def refiller_run
+    ranked.each { |q| replenish(q) }
+  end
+
   def evict(query)
     @stash[:queries].delete(query)
     @stash[:tables].each_value { |list| list.delete(query) }
     @stash[:tables].delete_if { |_, list| list.empty? }
-  end
-
-  def refiller!
-    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
-      ranked.each { |q| replenish(q) }
-    end
   end
 
   def ranked
