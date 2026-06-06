@@ -73,7 +73,7 @@ class Pgtk::Pool
     @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
-    @init_lock = Mutex.new
+    @lock = Mutex.new
     @started = false
   end
 
@@ -104,7 +104,7 @@ class Pgtk::Pool
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
   def start!
-    @init_lock.synchronize do
+    @lock.synchronize do
       return if @started
       @max.times do
         @pool.push(@wire.connection)
