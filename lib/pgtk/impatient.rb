@@ -63,10 +63,12 @@ class Pgtk::Impatient
   # @param [Pgtk::Pool] pool The pool to decorate
   # @param [Integer] timeout Timeout in seconds for each SQL query
   # @param [Array<Regex>] off List of regex to exclude queries from checking
-  def initialize(pool, timeout, *off)
+  # @param [Integer] default Fallback timeout in seconds for excluded queries (0 = no timeout)
+  def initialize(pool, timeout, *off, default: 300)
     @pool = pool
     @timeout = timeout
     @off = off
+    @default = default
   end
 
   # Start a new connection pool with the given arguments.
@@ -86,7 +88,7 @@ class Pgtk::Impatient
     [
       @pool.dump,
       '',
-      "Pgtk::Impatient (timeout=#{@timeout}s):",
+      "Pgtk::Impatient (timeout=#{@timeout}s, default=#{@default}s):",
       @off.map { |re| "  #{re}" }
     ].join("\n")
   end
@@ -106,7 +108,13 @@ class Pgtk::Impatient
   # @raise [TooSlow] If the query takes too long
   def exec(query, *args)
     sql = query.is_a?(Array) ? query.join(' ') : query
-    return @pool.exec(sql, *args) if @off.any? { |re| re.match?(sql) }
+    if @off.any? { |re| re.match?(sql) }
+      ms = Integer(@default * 1000)
+      return @pool.transaction do |t|
+        t.exec("SET LOCAL statement_timeout = #{ms}") unless ms.zero?
+        t.exec(sql, *args)
+      end
+    end
     start = Time.now
     ms = [Integer(@timeout * 1000), 1].max
     begin
