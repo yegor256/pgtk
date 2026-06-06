@@ -29,7 +29,7 @@ class Pgtk::Wire::Env
   def initialize(var = 'DATABASE_URL', **opts)
     raise(ArgumentError, "The name of the environment variable can't be nil") if var.nil?
     @value = ENV.fetch(var, nil)
-    raise(ArgumentError, "The environment variable #{@value.inspect} is not set") if @value.nil?
+    raise(ArgumentError, "The environment variable #{var.inspect} is not set") if @value.nil?
     @opts = opts
   end
 
