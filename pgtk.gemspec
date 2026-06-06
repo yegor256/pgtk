@@ -26,6 +26,7 @@ Gem::Specification.new do |s|
   s.executables = s.files.grep(%r{^bin/}) { |f| File.basename(f) }
   s.rdoc_options = ['--charset=UTF-8']
   s.extra_rdoc_files = ['README.md', 'LICENSE.txt']
+  s.add_dependency('cgi', '~>0.0')
   s.add_dependency('concurrent-ruby', '~>1.3')
   s.add_dependency('donce', '~>0.0')
   s.add_dependency('ellipsized', '~>0.3')
