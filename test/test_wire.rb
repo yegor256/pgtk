@@ -81,6 +81,21 @@ class TestWire < Pgtk::Test
     end
   end
 
+  def test_yaml_forwards_extra_opts
+    fake_config do |f|
+      c = YAML.load_file(f)
+      c['pgsql']['application_name'] = "pgtk_#{SecureRandom.hex(4)}"
+      File.write(f, YAML.dump(c))
+      assert_equal(
+        c['pgsql']['application_name'],
+        Pgtk::Wire::Yaml.new(f).connection.exec(
+          "SELECT current_setting('application_name')"
+        )[0]['current_setting'],
+        'extra YAML keys must reach PG.connect'
+      )
+    end
+  end
+
   def test_explicit_kwargs_win_over_url_query
     fake_config do |f|
       c = YAML.load_file(f)['pgsql']
