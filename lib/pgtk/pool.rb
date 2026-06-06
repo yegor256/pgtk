@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'ellipsized'
+require 'loog'
 require 'pg'
 require 'tago'
 require_relative '../pgtk'

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'loog'
 require 'pg'
 require_relative '../pgtk'
 require_relative 'wire'
