@@ -75,6 +75,19 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_select_with_keyword_in_string
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      stash.exec('CREATE TABLE tmp (id INT, title TEXT)')
+      stash.exec("INSERT INTO tmp VALUES (1, 'COMMIT or ROLLBACK')")
+      first = stash.exec("SELECT * FROM tmp WHERE title LIKE '%COMMIT%'")
+      second = stash.exec("SELECT * FROM tmp WHERE title LIKE '%COMMIT%'")
+      assert_equal(first.to_a, second.to_a)
+      assert_same(first, second, 'SELECT with COMMIT in string must be cached')
+    end
+  end
+
   def test_caching
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

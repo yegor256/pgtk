@@ -30,7 +30,7 @@ require_relative '../pgtk'
 # License:: MIT
 class Pgtk::Stash
   MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
-  MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
+  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
 
   IDENT = '[a-z_][a-z0-9_]*'
 
