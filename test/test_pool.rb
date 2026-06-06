@@ -305,6 +305,15 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_concurrent_start
+    fake_config do |f|
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 4)
+      Array.new(3) { Thread.new { pool.start! } }.each(&:join)
+      pool.start!
+      assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'], 'pool must work after concurrent start')
+    end
+  end
+
   def test_no_double_login_on_renew_failure
     fake_pool(1) do |pool|
       pool.exec('SELECT 1')
