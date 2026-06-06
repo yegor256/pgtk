@@ -353,6 +353,7 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT CURRENT_TIMESTAMP, title FROM book WHERE id = $1', [1])
       refute_includes(
         stash.dump, 'CURRENT_TIMESTAMP',
         'CURRENT_TIMESTAMP is non-deterministic and must not be cached'
@@ -365,6 +366,7 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT RANDOM(), title FROM book WHERE id = $1', [1])
       refute_includes(stash.dump, 'RANDOM', 'RANDOM() is non-deterministic and must not be cached')
     end
   end
@@ -374,6 +376,7 @@ class TestStash < Pgtk::Test
       stash = Pgtk::Stash.new(pool)
       stash.start!
       stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT GEN_RANDOM_UUID(), title FROM book WHERE id = $1', [1])
       refute_includes(stash.dump, 'GEN_RANDOM_UUID', 'GEN_RANDOM_UUID() is non-deterministic and must not be cached')
     end
   end
