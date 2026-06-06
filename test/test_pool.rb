@@ -326,6 +326,16 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_recycles_dead_connection_on_next_checkout
+    fake_pool(1) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map { |c| c.close unless c.finished? }
+      pool.exec('SELECT 42 AS n')
+      assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
+    end
+  end
+
   def test_no_slot_leak_on_renew_failure
     fake_pool(2) do |pool|
       pool.exec('SELECT 1')
