@@ -77,7 +77,9 @@ class Pgtk::Stash
     @pool = pool
     @stash = stash
     @stash[:table_mod] ||= {}
-    @stash[:table_inflight] ||= Hash.new { |h, k| h[k] = Concurrent::AtomicFixnum.new(0) }
+    unless @stash[:table_inflight].default_proc
+      @stash[:table_inflight] = Hash.new { |h, k| h[k] = Concurrent::AtomicFixnum.new(0) }
+    end
     @loog = loog
     @entrance = entrance
     @refill = refill
