@@ -107,13 +107,43 @@ class TestImpatient < Pgtk::Test
     end
   end
 
-  def test_skips_timeout_for_excluded_queries
+  def test_excluded_still_timed_out
     fake_pool do |pool|
       captured = []
       Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5, /^SELECT 1/).exec('SELECT 1')
+      assert(
+        captured.any? { |s| s.match?(/SET LOCAL statement_timeout\s*=\s*300000\b/) },
+        "must set default 300s statement_timeout for excluded queries, got: #{captured.inspect}"
+      )
+    end
+  end
+
+  def test_excluded_custom_default
+    fake_pool do |pool|
+      captured = []
+      Pgtk::Impatient.new(
+        Pgtk::Spy.new(pool) do |sql, _|
+          captured << sql
+        end, 1.5, /^SELECT 1/, default: 10
+      ).exec('SELECT 1')
+      assert(
+        captured.any? { |s| s.match?(/SET LOCAL statement_timeout\s*=\s*10000\b/) },
+        "must set custom default timeout, got: #{captured.inspect}"
+      )
+    end
+  end
+
+  def test_excluded_zero_default
+    fake_pool do |pool|
+      captured = []
+      Pgtk::Impatient.new(
+        Pgtk::Spy.new(pool) do |sql, _|
+          captured << sql
+        end, 1.5, /^SELECT 1/, default: 0
+      ).exec('SELECT 1')
       refute(
         captured.any? { |s| s.include?('SET LOCAL statement_timeout') },
-        "must not set statement_timeout for excluded queries, got: #{captured.inspect}"
+        "must not set statement_timeout when default is 0, got: #{captured.inspect}"
       )
     end
   end
