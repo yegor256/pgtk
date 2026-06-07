@@ -489,14 +489,6 @@ class TestPool < Pgtk::Test
     end
   end
 
-  def halt(dir)
-    if File.exist?(File.join(dir, 'pgsql', 'pid'))
-      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop")
-    elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
-      qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}")
-    end
-  end
-
   def drain(dir, port)
     cycle = 0
     loop do
