@@ -80,7 +80,12 @@ class Pgtk::Pool
   #
   # @return [String] Version of PostgreSQL server
   def version
-    @version ||= exec('SHOW server_version')[0]['server_version'].split[0]
+    @version ||=
+      begin
+        conn = @pool.pop
+        @pool.push(conn)
+        conn.parameter_status('server_version').split[0]
+      end
   end
 
   # Get as much details about it as possible.
