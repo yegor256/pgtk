@@ -129,6 +129,10 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       "-e POSTGRES_DB=#{Shellwords.escape(@dbname)}",
       '--detach',
       '--rm',
+      '--health-cmd', 'pg_isready',
+      '--health-interval', '1s',
+      '--health-timeout', '2s',
+      '--health-retries', '10',
       'postgres:18.1',
       @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
       stdout:
@@ -147,6 +151,15 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       WaitUtil.wait_for_service('PG in Docker', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
     rescue WaitUtil::TimeoutError => e
       raise(IOError, "Failed to start PostgreSQL Docker container #{container.inspect}: #{e.message}")
+    end
+    (30 * 2).times do
+      status = qbash(
+        "docker inspect --format='{{.State.Health.Status}}' #{Shellwords.escape(container)}",
+        accept: nil, both: true
+      )[0]&.strip
+      break if status == 'healthy'
+      raise(IOError, "PostgreSQL container #{container.inspect} is #{status}") if status == 'unhealthy'
+      sleep(0.5)
     end
     container
   end
