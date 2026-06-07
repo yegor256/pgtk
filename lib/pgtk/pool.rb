@@ -73,6 +73,7 @@ class Pgtk::Pool
     @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
+    @lock = Mutex.new
     @started = false
   end
 
@@ -108,20 +109,22 @@ class Pgtk::Pool
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
   def start!
-    return if @started
-    @max.times do
-      @pool.push(@wire.connection)
+    @lock.synchronize do
+      return if @started
+      @max.times do
+        @pool.push(@wire.connection)
+      end
+      (2 * @max).times do
+        connect { |c| c.exec('SELECT 1') }
+      rescue StandardError => e
+        @log.warn("Pool warm-up query failed, slot will be retried: #{e.message.strip}")
+      end
+      @max.times do
+        connect { |c| c.exec('SELECT 1') }
+      end
+      @started = true
+      @log.debug("PostgreSQL pool started with #{@max} connections")
     end
-    (2 * @max).times do
-      connect { |c| c.exec('SELECT 1') }
-    rescue StandardError => e
-      @log.warn("Pool warm-up query failed, slot will be retried: #{e.message.strip}")
-    end
-    @max.times do
-      connect { |c| c.exec('SELECT 1') }
-    end
-    @started = true
-    @log.debug("PostgreSQL pool started with #{@max} connections")
   end
 
   # Make a query and return the result as an array of hashes. For example,
