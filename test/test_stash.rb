@@ -348,6 +348,36 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_does_not_cache_current_timestamp
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      refute_includes(
+        stash.dump, 'CURRENT_TIMESTAMP',
+        'CURRENT_TIMESTAMP is non-deterministic and must not be cached'
+      )
+    end
+  end
+
+  def test_does_not_cache_random
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      refute_includes(stash.dump, 'RANDOM', 'RANDOM() is non-deterministic and must not be cached')
+    end
+  end
+
+  def test_does_not_cache_gen_random_uuid
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      refute_includes(stash.dump, 'GEN_RANDOM_UUID', 'GEN_RANDOM_UUID() is non-deterministic and must not be cached')
+    end
+  end
+
   def test_not_count_queries_that_uncached
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

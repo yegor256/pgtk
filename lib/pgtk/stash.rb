@@ -42,7 +42,9 @@ class Pgtk::Stash
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE
+  NONDETERMINISTIC = /\b(NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|LOCALTIMESTAMP|LOCALTIME|RANDOM|GEN_RANDOM_UUID|CLOCK_TIMESTAMP)\s*\(/i
+
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
 
   # Initialize a new Stash with query caching.
   #
@@ -256,7 +258,7 @@ class Pgtk::Stash
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
+      cache(pure, params, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
     end
     bump(pure, params) if @stash.dig(:queries, pure, params)
     ret
