@@ -19,11 +19,14 @@ class Pgtk::Wire::Yaml
   #
   # @param [String] file Path to the YAML configuration file
   # @param [String] node The root node name in the YAML file containing PostgreSQL configuration
-  def initialize(file, node = 'pgsql')
+  # @param [Hash] opts Extra options forwarded to +PG.connect+ (e.g. +sslmode+,
+  #   +connect_timeout+, +keepalives+). These override values from the YAML file.
+  def initialize(file, node = 'pgsql', **opts)
     raise(ArgumentError, "The name of the file can't be nil") if file.nil?
     @file = file
     raise(ArgumentError, "The name of the node in the YAML file can't be nil") if node.nil?
     @node = node
+    @opts = opts
   end
 
   # Create a new connection to PostgreSQL server.
@@ -36,7 +39,9 @@ class Pgtk::Wire::Yaml
       port: cfg[@node]['port'],
       dbname: cfg[@node]['dbname'],
       user: cfg[@node]['user'],
-      password: cfg[@node]['password']
+      password: cfg[@node]['password'],
+      **cfg[@node].except(*%w[host port dbname user password url]).transform_keys(&:to_sym),
+      **@opts
     ).connection
   end
 end
