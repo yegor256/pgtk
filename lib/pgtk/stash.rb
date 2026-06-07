@@ -39,9 +39,7 @@ class Pgtk::Stash
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
 
-  SEPARATOR = ' --%*@#~($-- '
-
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :SEPARATOR
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -249,20 +247,19 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
-    key = params.join(SEPARATOR)
-    ret = @stash.dig(:queries, pure, key, :ret)
-    if ret.nil? || @stash.dig(:queries, pure, key, :stale)
+    ret = @stash.dig(:queries, pure, params, :ret)
+    if ret.nil? || @stash.dig(:queries, pure, params, :stale)
       tables = pure.scan(READS_RE).flatten
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
+      cache(pure, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
     end
-    bump(pure, key) if @stash.dig(:queries, pure, key)
+    bump(pure, params) if @stash.dig(:queries, pure, params)
     ret
   end
 
-  def cache(pure, key, params, result, ret, tables, marks)
+  def cache(pure, params, result, ret, tables, marks)
     raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
     @entrance.with_write_lock do
       tables.each do |t|
@@ -270,7 +267,7 @@ class Pgtk::Stash
         @stash[:tables][t].append(pure).uniq!
       end
       @stash[:queries][pure] ||= {}
-      existing = @stash[:queries][pure][key]
+      existing = @stash[:queries][pure][params]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
       entry = { ret:, params:, result:, used: Time.now }
       entry[:stale] =
@@ -280,15 +277,15 @@ class Pgtk::Stash
           Time.now
         end
       entry.delete(:stale) if entry[:stale].nil?
-      @stash[:queries][pure][key] = entry
+      @stash[:queries][pure][params] = entry
     end
   end
 
-  def bump(pure, key)
+  def bump(pure, params)
     @entrance.with_write_lock do
-      @stash[:queries][pure][key][:popularity] ||= 0
-      @stash[:queries][pure][key][:popularity] += 1
-      @stash[:queries][pure][key][:used] = Time.now
+      @stash[:queries][pure][params][:popularity] ||= 0
+      @stash[:queries][pure][params][:popularity] += 1
+      @stash[:queries][pure][params][:used] = Time.now
     end
   end
 
