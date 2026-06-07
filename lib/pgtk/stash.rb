@@ -350,6 +350,8 @@ class Pgtk::Stash
           end
         end
       end
+    rescue StandardError => e
+      @loog.warn("Stash capper crashed: #{e.class}: #{e.message}")
     end
   end
 
@@ -361,6 +363,16 @@ class Pgtk::Stash
           evict(q) if @stash[:queries][q].empty?
         end
       end
+    rescue StandardError => e
+      @loog.warn("Stash retiree crashed: #{e.class}: #{e.message}")
+    end
+  end
+
+  def refiller!
+    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
+      ranked.each { |q| replenish(q) }
+    rescue StandardError => e
+      @loog.warn("Stash refiller crashed: #{e.class}: #{e.message}")
     end
   end
 
@@ -368,12 +380,6 @@ class Pgtk::Stash
     @stash[:queries].delete(query)
     @stash[:tables].each_value { |list| list.delete(query) }
     @stash[:tables].delete_if { |_, list| list.empty? }
-  end
-
-  def refiller!
-    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
-      ranked.each { |q| replenish(q) }
-    end
   end
 
   def ranked
