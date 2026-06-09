@@ -88,6 +88,19 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_pg_read_function_not_modify
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      pool.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      pool.exec('CREATE TABLE tmp (id INT)')
+      pool.exec('INSERT INTO tmp VALUES (1)')
+      result = stash.exec("SELECT pg_table_size('tmp')")
+      refute_nil(result)
+      stash.exec('INSERT INTO tmp VALUES (2)')
+      refute_same(result, stash.exec("SELECT pg_table_size('tmp')"), 'pg_*() result must not be cached')
+    end
+  end
+
   def test_caching
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

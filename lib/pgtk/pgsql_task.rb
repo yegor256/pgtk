@@ -194,12 +194,16 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       puts("PostgreSQL killed in PID #{pid}") unless @quiet
     end
     begin
-      WaitUtil.wait_for_service('PG in local', 'localhost', port, timeout_sec: 10, delay_sec: 0.1)
+      WaitUtil.wait_for_service('PG in local', 'localhost', port, timeout_sec: 10, delay_sec: 0.2)
     rescue WaitUtil::TimeoutError => e
       puts("+ #{cmd}")
       puts("stdout:\n#{File.read(File.join(home, 'stdout.txt'))}")
       puts("stderr:\n#{File.read(File.join(home, 'stderr.txt'))}")
       raise(IOError, "Failed to start PostgreSQL database server on port #{port}: #{e.message}")
+    end
+    (10 * 2).times do
+      break if qbash("pg_isready -h localhost -p #{port}", accept: nil, both: true)[1].zero?
+      sleep(0.5)
     end
     qbash(
       'createdb',
