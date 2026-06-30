@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 require 'threads'
+require 'timeout'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/stash'
 require_relative 'test__helper'
@@ -650,6 +651,54 @@ class TestStash < Pgtk::Test
       hammer(stash, 16, 2, 4, 10)
       sleep(stash.instance_variable_get(:@refill) + stash.instance_variable_get(:@delay) + 2)
       assert_empty(ghosts(stash, pool), 'list query keeps returning ghost ids whose rows no longer exist in DB')
+    end
+  end
+
+  def test_cache_hit_does_not_block_on_reader
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      query = 'SELECT id, title FROM book WHERE id = $1'
+      stash.exec(query, [1])
+      Thread.new { stash.instance_variable_get(:@entrance).with_read_lock { sleep(3) } }
+      sleep(0.5)
+      assert_equal(
+        'Elegant Objects',
+        Timeout.timeout(2) { stash.exec(query, [1]) }.first['title'],
+        'a cache hit must not serialize through the writer while a reader holds the lock'
+      )
+    end
+  end
+
+  def test_cache_hit_bumps_popularity
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      query = 'SELECT id, title FROM book WHERE id = $1'
+      5.times { stash.exec(query, [1]) }
+      assert_equal(
+        5,
+        stash.instance_variable_get(:@stash)[:queries][query].values.first[:popularity].value,
+        'every cache hit must bump popularity'
+      )
+    end
+  end
+
+  def test_cached_count_does_not_block_on_reader
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      stash.exec('SELECT id, title FROM book WHERE id = $1', [1])
+      Thread.new { stash.instance_variable_get(:@entrance).with_read_lock { sleep(3) } }
+      sleep(0.5)
+      assert_includes(
+        Timeout.timeout(2) { stash.dump },
+        'queries cached',
+        'counting cached entries must take the read lock, not the writer'
+      )
     end
   end
 
