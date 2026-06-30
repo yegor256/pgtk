@@ -690,6 +690,24 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_inflight_under_concurrent_modifies
+    fake_pool(4) do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      Array.new(4) do
+        Thread.new do
+          10.times do
+            stash.exec('UPDATE book SET title = $2 WHERE title = $1', [SecureRandom.hex(4), SecureRandom.hex(4)])
+          end
+        end
+      end.each(&:join)
+      assert_equal(
+        0, stash.instance_variable_get(:@stash)[:table_inflight]['book']&.value,
+        'inflight must be 0 after concurrent modifies'
+      )
+    end
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
