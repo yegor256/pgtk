@@ -97,4 +97,15 @@ class Pgtk::Spy
       yield(Pgtk::Spy.new(t, &@block))
     end
   end
+
+  # Run statements on a single connection (no transaction) with spying on
+  # each SQL query.
+  #
+  # @yield [Pgtk::Spy] Yields a spy bound to one connection
+  # @return [Object] Result of the block
+  def session
+    @pool.session do |t|
+      yield(Pgtk::Spy.new(t, &@block))
+    end
+  end
 end

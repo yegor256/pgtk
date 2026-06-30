@@ -128,6 +128,28 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_session_runs_without_transaction
+    fake_pool do |pool|
+      pool.session do |s|
+        s.exec('SET statement_timeout = 5000')
+        s.exec('VACUUM book')
+        s.exec('RESET statement_timeout')
+      end
+    end
+  end
+
+  def test_session_returns_block_result
+    fake_pool do |pool|
+      assert_predicate(
+        Integer(
+          pool.session do |s|
+            s.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['1984']).first['id']
+          end, 10
+        ), :positive?
+      )
+    end
+  end
+
   def test_logs_sql
     log = Loog::Buffer.new
     fake_pool(log: log) do |pool|

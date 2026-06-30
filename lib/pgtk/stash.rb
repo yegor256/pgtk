@@ -149,6 +149,16 @@ class Pgtk::Stash
     end
   end
 
+  # Run statements on a single connection, without a transaction.
+  #
+  # @yield [Pgtk::Stash] A stash bound to the connection
+  # @return [Object] The result of the block
+  def session
+    @pool.session do |t|
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
+    end
+  end
+
   private
 
   def queries

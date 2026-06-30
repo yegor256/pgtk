@@ -243,6 +243,18 @@ You can exclude specific queries from timeout enforcement using regex patterns:
 impatient = Pgtk::Impatient.new(pool, 2, /^SELECT/, /^VACUUM/)
 ```
 
+Excluded queries are never wrapped in a transaction, because statements such as
+`VACUUM`, `REINDEX`, or `CREATE INDEX CONCURRENTLY` cannot run inside a
+transaction block. Instead, a longer fallback timeout (300 seconds by default,
+configurable via the `default:` argument) is applied at the session level with
+`SET statement_timeout` before the query runs, and reset afterwards. Pass
+`default: 0` to run excluded queries with no timeout at all:
+
+```ruby
+# Give excluded queries a 60-second fallback timeout
+impatient = Pgtk::Impatient.new(pool, 2, /^VACUUM/, default: 60)
+```
+
 The timeout is enforced on the server side: each query is wrapped in a tiny
 transaction that issues `SET LOCAL statement_timeout`, and PostgreSQL itself
 terminates the query at the deadline. This guarantees the server-side

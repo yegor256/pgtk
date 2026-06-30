@@ -20,6 +20,14 @@ require_relative '../pgtk'
 # transaction-pool PgBouncer that does not forward client disconnects to in-flight
 # server queries). On timeout, +TooSlow+ is raised.
 #
+# Queries that match one of the +off+ regular expressions are excluded from
+# this checking. They are never wrapped in a transaction, because some
+# statements (such as +VACUUM+, +REINDEX+, or +CREATE INDEX CONCURRENTLY+)
+# cannot run inside a transaction block. Instead, a session-level
+# +SET statement_timeout+ is applied on the same connection before the query
+# runs (and reset afterwards), using the +default+ fallback timeout. Pass
+# +default: 0+ to run excluded queries with no timeout at all.
+#
 # Basic usage:
 #
 #   # Create and configure a regular pool
@@ -102,6 +110,13 @@ class Pgtk::Impatient
   # behind a transaction-pool PgBouncer). When the deadline fires, the
   # underlying +PG::QueryCanceled+ is translated to +TooSlow+.
   #
+  # Queries matching one of the +off+ regular expressions bypass this
+  # transaction. They run on a single connection without a transaction block,
+  # guarded by a session-level +SET statement_timeout+ (the +default+ fallback,
+  # reset afterwards) or by no timeout at all when +default+ is zero. This keeps
+  # statements that cannot run inside a transaction, such as +VACUUM+ or
+  # +REINDEX+, working as expected.
+  #
   # @param [String, Array] query The SQL query with params inside (possibly)
   # @param [Array] args List of arguments
   # @return [Array] Result rows
@@ -110,9 +125,10 @@ class Pgtk::Impatient
     sql = query.is_a?(Array) ? query.join(' ') : query
     if @off.any? { |re| re.match?(sql) }
       ms = Integer(@default * 1000)
-      return @pool.transaction do |t|
-        t.exec("SET LOCAL statement_timeout = #{ms}") unless ms.zero?
-        t.exec(sql, *args)
+      return @pool.exec(sql, *args) if ms.zero?
+      return @pool.session do |t|
+        t.exec("SET statement_timeout = #{ms}")
+        t.exec(sql, *args).tap { t.exec('RESET statement_timeout') }
       end
     end
     start = Time.now
