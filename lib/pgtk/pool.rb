@@ -214,6 +214,29 @@ class Pgtk::Pool
     end
   end
 
+  # Grab a single connection from the pool and yield an executor bound to it,
+  # WITHOUT starting a transaction. Unlike +transaction+, no +START TRANSACTION+
+  # is issued, which makes this suitable for statements that PostgreSQL refuses
+  # to run inside a transaction block, such as +VACUUM+, +REINDEX+, or
+  # +CREATE INDEX CONCURRENTLY+. All statements executed through the yielded
+  # object run on the same connection, so a session-level setting (for example
+  # +SET statement_timeout+) made earlier in the block stays in effect for the
+  # statements that follow:
+  #
+  #  pgsql.session do |s|
+  #    s.exec('SET statement_timeout = 5000')
+  #    s.exec('VACUUM book')
+  #    s.exec('RESET statement_timeout')
+  #  end
+  #
+  # @yield [Object] Yields an executor that responds to +exec+
+  # @return [Object] Result of the block
+  def session
+    connect do |c|
+      yield(Txn.new(c, @log))
+    end
+  end
+
   private
 
   def connect
