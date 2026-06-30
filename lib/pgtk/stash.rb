@@ -128,8 +128,10 @@ class Pgtk::Stash
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if MODS_RE.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
+    if MODS_RE.match?(pure)
       modify(pure, params, result)
+    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure)
+      @pool.exec(pure, params, result)
     else
       select(pure, params, result)
     end

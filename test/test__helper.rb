@@ -69,6 +69,8 @@ class Pgtk::Test < Minitest::Test
       Rake::Task[lb].invoke
       assert_path_exists(f)
       yield(f)
+    ensure
+      halt(dir) if dir
     end
   end
 
@@ -77,6 +79,17 @@ class Pgtk::Test < Minitest::Test
       pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: size, log: log)
       pool.start!
       yield(pool)
+    end
+  end
+
+  private
+
+  def halt(dir)
+    home = File.join(dir, 'pgsql')
+    if File.exist?(File.join(home, 'pid'))
+      qbash("pg_ctl -D #{Shellwords.escape(home)} stop")
+    elsif File.exist?(File.join(home, 'docker-container'))
+      qbash("docker stop #{File.read(File.join(home, 'docker-container'))}")
     end
   end
 end
