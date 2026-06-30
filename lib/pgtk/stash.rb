@@ -146,7 +146,7 @@ class Pgtk::Stash
       {
         q: q.dup,
         c: kk.values.count,
-        p: kk.values.sum { |vv| vv[:popularity] },
+        p: kk.values.sum { |vv| vv[:popularity]&.value || 0 },
         s: kk.values.count { |vv| vv[:stale] },
         u: kk.values.map { |vv| vv[:used] }.max || Time.now
       }
@@ -280,23 +280,32 @@ class Pgtk::Stash
           Time.now
         end
       entry.delete(:stale) if entry[:stale].nil?
+      entry[:popularity] = (existing && existing[:popularity]) || Concurrent::AtomicFixnum.new
       @stash[:queries][pure][params] = entry
     end
   end
 
+  # Bump popularity and last-used time of a cached entry.
+  #
+  # This runs without the exclusive write lock: popularity is a
+  # +Concurrent::AtomicFixnum+ and +used+ is a plain assignment of an
+  # immutable value, neither of which mutates the structure of the
+  # +@stash[:queries]+ tree. Keeping it off the writer lock means a
+  # read-only workload never serializes through the writer (see #414).
+  #
+  # @return [void]
   def bump(pure, params)
-    @entrance.with_write_lock do
-      @stash[:queries][pure][params][:popularity] ||= 0
-      @stash[:queries][pure][params][:popularity] += 1
-      @stash[:queries][pure][params][:used] = Time.now
-    end
+    entry = @stash.dig(:queries, pure, params)
+    return unless entry
+    (entry[:popularity] ||= Concurrent::AtomicFixnum.new).increment
+    entry[:used] = Time.now
   end
 
   # Calculate total number of cached query results.
   #
   # @return [Integer] Total count of cached query results
   def cached
-    @entrance.with_write_lock do
+    @entrance.with_read_lock do
       @stash[:queries].values.sum { |kk| kk.values.size }
     end
   end
@@ -386,7 +395,7 @@ class Pgtk::Stash
     qq =
       @entrance.with_write_lock do
         @stash[:queries]
-          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity]&.value || 0 }, v.values.any? { |vv| vv[:stale] }] }
       end
     qq.select { _1[2] }.sort_by { -_1[1] }.map { _1[0] }
   end
