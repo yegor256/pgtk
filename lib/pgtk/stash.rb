@@ -34,6 +34,7 @@ class Pgtk::Stash
     REINDEX TRUNCATE CREATE ALTER DROP SET START
   ].freeze
   MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
+  WITH_RE = /\AWITH(\s|$)/
 
   IDENT = '[a-z_][a-z0-9_]*'
 
@@ -48,7 +49,7 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
 
   # Initialize a new Stash with query caching.
   #
@@ -130,7 +131,7 @@ class Pgtk::Stash
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if MODS_RE.match?(pure)
+    if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure)
       @pool.exec(pure, params, result)

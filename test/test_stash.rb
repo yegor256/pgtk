@@ -124,6 +124,40 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_cte_write_invalidates_cache
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Old Title'])
+      query = 'SELECT title FROM book'
+      first = stash.exec(query)
+      assert_same(first, stash.exec(query), 'SELECT must be cached before the CTE write')
+      stash.exec(
+        [
+          'WITH doomed AS (SELECT id FROM book WHERE title = $1)',
+          'DELETE FROM book USING doomed WHERE book.id = doomed.id RETURNING book.title'
+        ].join(' '),
+        ['Old Title']
+      )
+      refute_same(
+        first, stash.exec(query),
+        'a data-modifying CTE (WITH ... DELETE) must invalidate a previously-cached SELECT on the same table'
+      )
+      assert_empty(stash.exec(query).to_a, 'the deleted row must be gone from the cached SELECT')
+    end
+  end
+
+  def test_cte_read_stays_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Readable'])
+      query = 'WITH recent AS (SELECT title FROM book) SELECT title FROM recent'
+      assert_same(
+        stash.exec(query), stash.exec(query),
+        'a read-only CTE (WITH ... SELECT) must still be cached as a read'
+      )
+    end
+  end
+
   def test_invalidates_cache_for_underscored_table
     fake_pool do |pool|
       pool.exec('CREATE TABLE user_settings (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
