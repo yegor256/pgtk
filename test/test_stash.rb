@@ -871,6 +871,28 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_volatile_accepts_symbol_names
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: [:book])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Sym'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Sym']).then do |first|
+        refute_same(first, stash.exec(query, ['Sym']), 'a symbol volatile name must be coerced and honoured')
+      end
+    end
+  end
+
+  def test_volatile_defaults_to_empty_and_caches
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: nil)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Nil'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Nil']).then do |first|
+        assert_same(first, stash.exec(query, ['Nil']), 'nil volatile must behave like an empty list')
+      end
+    end
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)

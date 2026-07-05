@@ -96,7 +96,7 @@ class Pgtk::Stash
     end
     @loog = loog
     @entrance = entrance
-    @volatile = volatile
+    @volatile = Array(volatile).map(&:to_s).freeze
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
