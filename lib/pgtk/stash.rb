@@ -192,7 +192,8 @@ class Pgtk::Stash
       else
         '  Not launched yet'
       end,
-      "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap), ~#{footprint} bytes of RAM",
+      "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap)",
+      "  ~#{footprint} bytes of RAM occupied by cache",
       "  #{@stash[:tables].count} tables in cache",
       "  #{list.sum { |a| a[:s] }} stale queries in cache:",
       stale(list),
