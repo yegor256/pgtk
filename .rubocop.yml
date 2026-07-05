@@ -16,7 +16,7 @@ plugins:
   - rubocop-performance
   - rubocop-elegant
 Metrics/ClassLength:
-  Max: 341
+  Max: 343
 Metrics/CyclomaticComplexity:
   Max: 20
 Metrics/PerceivedComplexity:

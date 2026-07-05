@@ -808,6 +808,69 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_volatile_table_is_never_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Volatile'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Volatile']).then do |first|
+        refute_same(first, stash.exec(query, ['Volatile']), 'a volatile table must never be cached')
+      end
+    end
+  end
+
+  def test_non_volatile_table_still_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['invocation'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Cacheable'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Cacheable']).then do |first|
+        assert_same(first, stash.exec(query, ['Cacheable']), 'a non-volatile table must still be cached')
+      end
+    end
+  end
+
+  def test_volatile_ignores_name_in_string_literal
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      stash.exec('CREATE TABLE tmp (id INT, title TEXT)')
+      stash.exec("INSERT INTO tmp VALUES (1, 'from book')")
+      query = "SELECT title FROM tmp WHERE title LIKE '%book%'"
+      stash.exec(query).then do |first|
+        assert_same(first, stash.exec(query), 'the volatile name inside a string literal must not disable caching')
+      end
+    end
+  end
+
+  def test_volatile_propagates_into_transaction
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Tx'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.transaction do |tx|
+        tx.exec(query, ['Tx']).then do |first|
+          refute_same(first, tx.exec(query, ['Tx']), 'volatile bypass must hold inside a transaction')
+        end
+        true
+      end
+    end
+  end
+
+  def test_volatile_propagates_into_session
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Sess'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.session do |s|
+        s.exec(query, ['Sess']).then do |first|
+          refute_same(first, s.exec(query, ['Sess']), 'volatile bypass must hold inside a session')
+        end
+        true
+      end
+    end
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)

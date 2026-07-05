@@ -16,6 +16,10 @@ require_relative '../pgtk'
 # the cache when tables are modified. Read queries are cached while write
 # queries bypass the cache and invalidate related cached entries.
 #
+# Tables that are too write-heavy to benefit from caching can be listed
+# via the +volatile:+ constructor parameter; any read whose FROM/JOIN
+# set touches one of them bypasses the cache entirely.
+#
 # Thread-safe with read-write locking.
 #
 # The implementation is very naive! Use it at your own risk.
@@ -68,11 +72,13 @@ class Pgtk::Stash
   # @param [Float] retirement Interval in seconds between retirement tasks
   # @param [Loog] loog Logger instance
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
+  # @param [Array<String>] volatile Table names that must never be cached
   def initialize(
     pool,
     stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
+    volatile: [],
     refill: 16,
     delay: 0,
     maxqueue: 128,
@@ -90,6 +96,7 @@ class Pgtk::Stash
     end
     @loog = loog
     @entrance = entrance
+    @volatile = volatile
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
@@ -134,7 +141,7 @@ class Pgtk::Stash
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
-    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure)
+    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
       @pool.exec(pure, params, result)
     else
       select(pure, params, result)
@@ -147,7 +154,7 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
     end
   end
 
@@ -157,7 +164,7 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def session
     @pool.session do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
     end
   end
 
