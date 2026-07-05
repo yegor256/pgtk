@@ -6,6 +6,7 @@
 require 'concurrent-ruby'
 require 'joined'
 require 'loog'
+require 'objspace'
 require 'tago'
 require_relative '../pgtk'
 
@@ -184,7 +185,7 @@ class Pgtk::Stash
       else
         '  Not launched yet'
       end,
-      "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap)",
+      "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap), ~#{footprint} bytes of RAM",
       "  #{@stash[:tables].count} tables in cache",
       "  #{list.sum { |a| a[:s] }} stale queries in cache:",
       stale(list),
@@ -324,6 +325,33 @@ class Pgtk::Stash
   def cached
     @entrance.with_read_lock do
       @stash[:queries].values.sum { |kk| kk.values.size }
+    end
+  end
+
+  # Estimate the total heap footprint, in bytes, of everything held in
+  # +@stash[:queries]+.
+  #
+  # The count of cached entries alone is misleading: a single query with many
+  # parameter combinations keeps a distinct +PG::Result+ per combination, and
+  # the +cap+ limits the number of entries, not their weight. This gauge sums
+  # +ObjectSpace.memsize_of+ over each cached entry and its +:ret+, +:params+,
+  # and key strings, so an operator can tell whether the cache is about to
+  # exhaust memory. +Marshal+ is not an option here since neither +PG::Result+
+  # nor +Concurrent::AtomicFixnum+ is marshallable.
+  #
+  # The result is approximate: +memsize_of+ is shallow, so nested contents
+  # (rows inside a +PG::Result+) are only partially accounted for. A rough
+  # order of magnitude is enough.
+  #
+  # @return [Integer] Approximate total bytes of RAM held by the cache
+  def footprint
+    @entrance.with_read_lock do
+      @stash[:queries].sum do |q, kk|
+        ObjectSpace.memsize_of(q) +
+          kk.sum do |params, entry|
+            [params, entry, entry[:ret], entry[:params]].sum { |o| ObjectSpace.memsize_of(o) }
+          end
+      end
     end
   end
 

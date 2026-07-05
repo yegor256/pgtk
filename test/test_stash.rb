@@ -308,6 +308,23 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_dump_reports_memory_footprint
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      empty = stash.dump[/~(\d+) bytes of RAM/, 1]
+      refute_nil(empty, 'the dump must report the cache RAM footprint')
+      10.times do |i|
+        stash.exec('SELECT id, title FROM book WHERE title = $1', ["My book #{i}"])
+      end
+      assert_operator(
+        Integer(stash.dump[/~(\d+) bytes of RAM/, 1]), :>, Integer(empty),
+        'caching results must grow the reported footprint'
+      )
+    end
+  end
+
   def test_cache_refills
     interval = 0.2
     fake_pool do |pool|
