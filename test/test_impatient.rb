@@ -33,9 +33,17 @@ class TestImpatient < Pgtk::Test
   end
 
   def test_interrupts
-    fake_pool do |pool|
+    fake_pool(options: '-c statement_timeout=10') do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do
         Pgtk::Impatient.new(pool, 0.01).exec(['SELECT COUNT(*)', 'FROM generate_series(1, 1000000) AS a'])
+      end
+    end
+  end
+
+  def test_interrupts_query_with_arguments
+    fake_pool(options: '-c statement_timeout=50') do |pool|
+      assert_raises(Pgtk::Impatient::TooSlow) do
+        Pgtk::Impatient.new(pool, 0.05).exec('SELECT pg_sleep($1)', [5])
       end
     end
   end
@@ -96,14 +104,11 @@ class TestImpatient < Pgtk::Test
     end
   end
 
-  def test_sets_server_side_timeout_per_query
+  def test_sends_query_alone
     fake_pool do |pool|
       captured = []
       Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5).exec('SELECT 1')
-      assert(
-        captured.any? { |s| s.match?(/SET LOCAL statement_timeout\s*=\s*\d+/) },
-        "must set statement_timeout per query, got: #{captured.inspect}"
-      )
+      assert_equal(['SELECT 1'], captured, "must send no statement ahead of the query: #{captured.inspect}")
     end
   end
 
@@ -145,9 +150,9 @@ class TestImpatient < Pgtk::Test
           captured << sql
         end, 1.5, /^SELECT 1/, default: 0
       ).exec('SELECT 1')
-      refute(
-        captured.any? { |s| s.include?('statement_timeout') },
-        "must not set statement_timeout when default is 0, got: #{captured.inspect}"
+      assert(
+        captured.any? { |s| s.match?(/SET statement_timeout\s*=\s*0\b/) },
+        "must lift the limit of the connection when default is 0, got: #{captured.inspect}"
       )
     end
   end
@@ -159,7 +164,7 @@ class TestImpatient < Pgtk::Test
   end
 
   def test_does_not_leave_orphan_backend_after_timeout
-    fake_pool(2) do |pool|
+    fake_pool(2, options: '-c statement_timeout=300') do |pool|
       tag = SecureRandom.hex(8)
       sql = "SELECT pg_sleep(30) /* #{tag} */"
       assert_raises(Pgtk::Impatient::TooSlow) do

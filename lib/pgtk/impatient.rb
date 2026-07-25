@@ -12,26 +12,30 @@ require_relative '../pgtk'
 # It ensures that SQL queries don't run indefinitely, which helps prevent application
 # hangs and resource exhaustion when database operations are slow or stalled.
 #
-# This class implements the same interface as Pool but enforces the timeout on the
-# server side, by wrapping each query in a tiny transaction that issues
-# +SET LOCAL statement_timeout+. PostgreSQL itself terminates the query at the
-# deadline, which guarantees that the server-side connection slot is freed even
-# when the client cannot deliver a cancellation request (for example, behind a
-# transaction-pool PgBouncer that does not forward client disconnects to in-flight
-# server queries). On timeout, +TooSlow+ is raised.
+# This class implements the same interface as Pool. The timeout itself is
+# enforced by PostgreSQL, through the +statement_timeout+ that the wire puts
+# into the startup packet of every connection. The limit is in force from the
+# first byte of the first statement, which no in-band +SET+ can achieve: the
+# +SET+ itself, and the +START TRANSACTION+ ahead of it, would travel with no
+# limit at all. Because the setting arrives in the startup packet, it also
+# survives a transaction-pooling PgBouncer, and it frees the server-side
+# connection slot even when the client cannot deliver a cancellation request.
+# When PostgreSQL terminates a query at the deadline, +TooSlow+ is raised here.
 #
 # Queries that match one of the +off+ regular expressions are excluded from
-# this checking. They are never wrapped in a transaction, because some
-# statements (such as +VACUUM+, +REINDEX+, or +CREATE INDEX CONCURRENTLY+)
-# cannot run inside a transaction block. Instead, a session-level
-# +SET statement_timeout+ is applied on the same connection before the query
-# runs (and reset afterwards), using the +default+ fallback timeout. Pass
-# +default: 0+ to run excluded queries with no timeout at all.
+# this checking. They run on a single connection, guarded by a session-level
+# +SET statement_timeout+ with the +default+ fallback timeout, which is reset
+# afterwards. Pass +default: 0+ to run excluded queries with no timeout at all.
+# This is how statements that take much longer than a query, such as +VACUUM+
+# or +REINDEX+, stay possible.
 #
 # Basic usage:
 #
-#   # Create and configure a regular pool
-#   pool = Pgtk::Pool.new(wire, max: 4)
+#   # Create a pool of connections that carry a two-second limit
+#   pool = Pgtk::Pool.new(
+#     Pgtk::Wire::Env.new('DATABASE_URL', options: '-c statement_timeout=2000'),
+#     max: 4
+#   )
 #   pool.start!
 #
 #   # Wrap the pool in an impatient decorator with a 2-second timeout
@@ -69,7 +73,8 @@ class Pgtk::Impatient
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
-  # @param [Integer] timeout Timeout in seconds for each SQL query
+  # @param [Integer] timeout Timeout in seconds for each SQL query, the same
+  #   one that the connections of the pool carry as +statement_timeout+
   # @param [Array<Regex>] off List of regex to exclude queries from checking
   # @param [Integer] default Fallback timeout in seconds for excluded queries (0 = no timeout)
   def initialize(pool, timeout, *off, default: 300)
@@ -103,18 +108,14 @@ class Pgtk::Impatient
 
   # Execute a SQL query with a server-side timeout.
   #
-  # The query is wrapped in a tiny transaction that issues
-  # +SET LOCAL statement_timeout+, so PostgreSQL itself terminates the query
-  # at the deadline. This guarantees the server-side connection slot is freed
-  # even when the client cannot deliver a cancellation request (for example,
-  # behind a transaction-pool PgBouncer). When the deadline fires, the
-  # underlying +PG::QueryCanceled+ is translated to +TooSlow+.
+  # The query travels alone, in a single round trip, and the limit is the
+  # +statement_timeout+ that the connection already carries. When the deadline
+  # fires, the underlying +PG::QueryCanceled+ is translated to +TooSlow+.
   #
-  # Queries matching one of the +off+ regular expressions bypass this
-  # transaction. They run on a single connection without a transaction block,
-  # guarded by a session-level +SET statement_timeout+ (the +default+ fallback,
-  # reset afterwards) or by no timeout at all when +default+ is zero. This keeps
-  # statements that cannot run inside a transaction, such as +VACUUM+ or
+  # Queries matching one of the +off+ regular expressions are guarded instead
+  # by a session-level +SET statement_timeout+ (the +default+ fallback, reset
+  # afterwards), or by no timeout at all when +default+ is zero. This keeps
+  # statements that need much longer than a query, such as +VACUUM+ or
   # +REINDEX+, working as expected.
   #
   # @param [String, Array] query The SQL query with params inside (possibly)
@@ -124,20 +125,14 @@ class Pgtk::Impatient
   def exec(query, *args)
     sql = query.is_a?(Array) ? query.join(' ') : query
     if @off.any? { |re| re.match?(sql) }
-      ms = Integer(@default * 1000)
-      return @pool.exec(sql, *args) if ms.zero?
       return @pool.session do |t|
-        t.exec("SET statement_timeout = #{ms}")
+        t.exec("SET statement_timeout = #{Integer(@default * 1000)}")
         t.exec(sql, *args).tap { t.exec('RESET statement_timeout') }
       end
     end
     start = Time.now
-    ms = [Integer(@timeout * 1000), 1].max
     begin
-      @pool.transaction do |t|
-        t.exec("SET LOCAL statement_timeout = #{ms}")
-        t.exec(sql, *args)
-      end
+      @pool.exec(sql, *args)
     rescue PG::QueryCanceled
       raise(
         TooSlow, [

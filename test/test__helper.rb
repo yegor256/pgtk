@@ -74,9 +74,9 @@ class Pgtk::Test < Minitest::Test
     end
   end
 
-  def fake_pool(size = 1, log: Loog::NULL)
+  def fake_pool(size = 1, log: Loog::NULL, **opts)
     fake_config do |f|
-      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: size, log: log)
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f, **opts), max: size, log: log)
       pool.start!
       yield(pool)
     end
