@@ -217,13 +217,25 @@ end
 ## Query Timeouts with `Pgtk::Impatient`
 
 To prevent queries from running indefinitely, use `Pgtk::Impatient` to enforce
-timeouts on database operations:
+timeouts on database operations.
+The limit itself belongs to the connection: the wire puts `statement_timeout`
+into the startup packet, and the decorator explains what happened when
+PostgreSQL applies it:
 
 ```ruby
 require 'pgtk/impatient'
-# Wrap the pool with a 5-second timeout for all queries
+# Every connection of the pool carries a 5-second limit
+pool = Pgtk::Pool.new(
+  Pgtk::Wire::Env.new('DATABASE_URL', options: '-c statement_timeout=5000'),
+  max: 4
+)
+pool.start!
+# Wrap the pool, telling it about the very same 5 seconds
 impatient = Pgtk::Impatient.new(pool, 5)
 ```
+
+Both numbers must agree, since the connection stops the query, while the
+decorator only reports it.
 
 The impatient decorator ensures queries don't hang your application:
 
@@ -243,31 +255,32 @@ You can exclude specific queries from timeout enforcement using regex patterns:
 impatient = Pgtk::Impatient.new(pool, 2, /^SELECT/, /^VACUUM/)
 ```
 
-Excluded queries are never wrapped in a transaction, because statements such as
-`VACUUM`, `REINDEX`, or `CREATE INDEX CONCURRENTLY` cannot run inside a
-transaction block. Instead, a longer fallback timeout (300 seconds by default,
-configurable via the `default:` argument) is applied at the session level with
-`SET statement_timeout` before the query runs, and reset afterwards. Pass
-`default: 0` to run excluded queries with no timeout at all:
+Excluded queries get a longer fallback timeout (300 seconds by default,
+configurable via the `default:` argument), applied at the session level with
+`SET statement_timeout` before the query runs and reset afterwards. This is how
+statements that legitimately need much longer than a query, such as `VACUUM`,
+`REINDEX`, or `CREATE INDEX CONCURRENTLY`, stay possible. Pass `default: 0` to
+run excluded queries with no timeout at all:
 
 ```ruby
 # Give excluded queries a 60-second fallback timeout
 impatient = Pgtk::Impatient.new(pool, 2, /^VACUUM/, default: 60)
 ```
 
-The timeout is enforced on the server side: each query is wrapped in a tiny
-transaction that issues `SET LOCAL statement_timeout`, and PostgreSQL itself
-terminates the query at the deadline. This guarantees the server-side
-connection slot is freed even when the client cannot deliver a cancellation
-request — for example, behind a transaction-pool PgBouncer that does not
-forward client disconnects to in-flight server queries.
+The limit travels in the startup packet and nowhere else. An in-band
+`SET LOCAL statement_timeout` arrives behind a `START TRANSACTION`, and both of
+them run with no limit in force, which is exactly the hang that `Impatient`
+exists to prevent. A setting from the startup packet is in force from the first
+byte of the first statement, survives a transaction-pooling PgBouncer, and
+frees the server-side connection slot even when the client cannot deliver a
+cancellation request.
 
 Key features:
 
 1. Configurable timeout in seconds for each query
 1. Raises `Pgtk::Impatient::TooSlow` exception when timeout is exceeded
 1. Can exclude queries matching specific patterns from timeout checks
-1. Sets PostgreSQL's `statement_timeout` per query and per transaction,
+1. Sends each query in a single round trip, with the limit already in force,
    so timeouts are enforced server-side and orphan backends do not pile up
 
 ## Query Caching with `Pgtk::Stash`
