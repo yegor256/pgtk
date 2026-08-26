@@ -88,7 +88,7 @@ GEM
       loog (> 0)
       tago (> 0)
     racc (1.8.1)
-    rack (3.2.6)
+    rack (3.2.7)
     rainbow (3.1.1)
     rake (13.4.2)
     random-port (0.8.2)
