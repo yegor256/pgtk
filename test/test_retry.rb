@@ -346,4 +346,17 @@ class TestRetry < Pgtk::Test
       )
     end
   end
+
+  def test_does_not_retry_a_broken_select
+    counter = 0
+    stub = Object.new
+    stub.define_singleton_method(:exec) do |_sql, *_args|
+      counter += 1
+      raise(PG::UndefinedTable, 'relation "missing_table" does not exist')
+    end
+    assert_raises(PG::UndefinedTable) do
+      Pgtk::Retry.new(stub, attempts: 3).exec('SELECT * FROM missing_table')
+    end
+    assert_equal(1, counter, 'a missing table is not going to appear on the second attempt')
+  end
 end
