@@ -52,6 +52,16 @@ require_relative 'pool/busy'
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
 
+  DETERMINISTIC = [
+    PG::SyntaxErrorOrAccessRuleViolation,
+    PG::DataException,
+    PG::IntegrityConstraintViolation,
+    PG::FeatureNotSupported,
+    ArgumentError,
+    TypeError,
+    NameError
+  ].freeze
+
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
@@ -84,7 +94,10 @@ class Pgtk::Retry
   end
 
   # Execute a SQL query with automatic retry on transient failures.
-  # Only SELECT queries are retried, since reads are idempotent. The
+  # Only SELECT queries are retried, since reads are idempotent, and only
+  # when the failure may be transient: an error from DETERMINISTIC, such as
+  # a malformed statement or a violated constraint, is raised as it is,
+  # with its own type, and the query is not sent again. The
   # single exception is Pgtk::Pool::Busy, which is retried for every
   # query type: it is raised while waiting for a free connection, thus
   # the statement provably never reached the server and a second
@@ -110,6 +123,7 @@ class Pgtk::Retry
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
+      raise(e) if DETERMINISTIC.any? { |k| e.is_a?(k) }
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
