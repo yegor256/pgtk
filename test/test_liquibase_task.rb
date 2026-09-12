@@ -112,4 +112,20 @@ class TestLiquibaseTask < Pgtk::Test
       )
     end
   end
+
+  def test_complains_when_no_yaml_candidate_exists
+    [[], %w[file-is-absent another-one]].each_with_index do |yaml, idx|
+      name = "liquibase_no_yaml_#{idx}"
+      Pgtk::LiquibaseTask.new(name.to_sym) do |t|
+        t.master = File.join(__dir__, '../test-resources/master.xml')
+        t.yaml = yaml
+        t.quiet = true
+      end
+      assert_includes(
+        assert_raises(ArgumentError) { Rake::Task[name].invoke }.message,
+        'None of the YAML files exists',
+        "a #{yaml.size}-item list of missing files must be reported, not crash inside YAML.load_file"
+      )
+    end
+  end
 end
