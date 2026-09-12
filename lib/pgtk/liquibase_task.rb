@@ -79,6 +79,11 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     raise(ArgumentError, "The 'url' is not set in the config (YAML)") if yml['pgsql']['url'].nil?
     raise(ArgumentError, "The 'user' is not set in the config (YAML)") if yml['pgsql']['user'].nil?
     raise(ArgumentError, "The 'password' is not set in the config (YAML)") if yml['pgsql']['password'].nil?
+    return if @schema.nil?
+    %w[host port dbname].each do |key|
+      next unless yml['pgsql'][key].nil?
+      raise(ArgumentError, "The '#{key}' is not set in the config (YAML), but pg_dump needs it for the schema")
+    end
   end
 
   def migrate(yml)
