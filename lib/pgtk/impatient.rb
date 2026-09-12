@@ -122,17 +122,17 @@ class Pgtk::Impatient
   # @param [Array] args List of arguments
   # @return [Array] Result rows
   # @raise [TooSlow] If the query takes too long
-  def exec(query, *args)
+  def exec(query, *args, &)
     sql = query.is_a?(Array) ? query.join(' ') : query
     if @off.any? { |re| re.match?(sql) }
       return @pool.session do |t|
         t.exec("SET statement_timeout = #{Integer(@default * 1000)}")
-        t.exec(sql, *args).tap { t.exec('RESET statement_timeout') }
+        t.exec(sql, *args, &).tap { t.exec('RESET statement_timeout') }
       end
     end
     start = Time.now
     begin
-      @pool.exec(sql, *args)
+      @pool.exec(sql, *args, &)
     rescue PG::QueryCanceled
       raise(
         TooSlow, [

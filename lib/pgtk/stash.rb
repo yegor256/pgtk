@@ -133,16 +133,21 @@ class Pgtk::Stash
 
   # Execute a SQL query with optional caching.
   #
+  # When a block is given, it is forwarded to the pool and receives the live
+  # +PG::Result+, as in +Pgtk::Pool#exec+. Such a query is not cached, since
+  # the cache holds rows and not an open result, but a modifying one still
+  # invalidates everything it touches.
+  #
   # @param [String, Array<String>] query The SQL query
   # @param [Array] params Query parameters
   # @param [Integer] result Result format code
   # @return [PG::Result] Query result object
-  def exec(query, params = [], result = 0)
+  def exec(query, params = [], result = 0, &)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
-      modify(pure, params, result)
-    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
-      @pool.exec(pure, params, result)
+      modify(pure, params, result, &)
+    elsif block_given? || uncacheable?(pure)
+      @pool.exec(pure, params, result, &)
     else
       select(pure, params, result)
     end
@@ -249,13 +254,17 @@ class Pgtk::Stash
     items
   end
 
-  def modify(pure, params, result)
+  def uncacheable?(pure)
+    /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
+  end
+
+  def modify(pure, params, result, &)
     tables = pure.scan(ALTS_RE).flatten
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
     begin
-      @pool.exec(pure, params, result).tap do
+      @pool.exec(pure, params, result, &).tap do
         now = Time.now
         @entrance.with_write_lock do
           affected.each do |t|

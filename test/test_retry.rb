@@ -346,4 +346,19 @@ class TestRetry < Pgtk::Test
       )
     end
   end
+
+  def test_forwards_the_block_to_the_pool
+    pool =
+      Class.new do
+        def exec(_query, _args = [], _result = 0)
+          return yield(:live) if block_given?
+          [{ 'n' => 1 }]
+        end
+      end.new
+    assert_equal(
+      :live,
+      Pgtk::Retry.new(pool, attempts: 2).exec('SELECT 1') { |res| res },
+      'the block must receive the live result of the pool, as Pool#exec promises'
+    )
+  end
 end

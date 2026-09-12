@@ -100,11 +100,11 @@ class Pgtk::Retry
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
-  def exec(sql, *)
+  def exec(sql, *, &)
     query = sql.is_a?(Array) ? sql.join(' ') : sql
     attempt = 0
     begin
-      @pool.exec(sql, *)
+      @pool.exec(sql, *, &)
     rescue Pgtk::Pool::Busy => e
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
