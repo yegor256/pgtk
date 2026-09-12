@@ -893,6 +893,26 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_forwards_the_block_to_the_pool
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          def exec(_query, _args = [], _result = 0)
+            return yield(:live) if block_given?
+            [{ 'n' => 1 }]
+          end
+        end.new
+      )
+    assert_equal(
+      :live, stash.exec('SELECT * FROM book') { |res| res },
+      'a read with a block must receive the live result of the pool'
+    )
+    assert_equal(
+      :live, stash.exec('INSERT INTO book (title) VALUES ($1)', ['x']) { |res| res },
+      'a modifying query with a block must receive the live result too'
+    )
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
