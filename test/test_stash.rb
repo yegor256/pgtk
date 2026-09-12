@@ -893,6 +893,47 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_caches_a_read_from_a_qualified_table
+    seen = []
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          define_method(:initialize) { |log| @log = log }
+          define_method(:exec) do |query, _args = [], _result = 0|
+            @log << query
+            [{ 'title' => 'x' }]
+          end
+        end.new(seen)
+      )
+    stash.exec('SELECT * FROM public.book')
+    stash.exec('SELECT * FROM public.book')
+    assert_equal(1, seen.size, 'a schema-qualified SELECT must be cached, not rejected')
+    stash.exec('UPDATE book SET title = $1', ['y'])
+    stash.exec('SELECT * FROM public.book')
+    assert_equal(
+      3, seen.size,
+      'a write to the same table must invalidate it, whether the read qualified the name or not'
+    )
+  end
+
+  def test_invalidates_a_write_to_a_qualified_table
+    seen = []
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          define_method(:initialize) { |log| @log = log }
+          define_method(:exec) do |query, _args = [], _result = 0|
+            @log << query
+            [{ 'title' => 'x' }]
+          end
+        end.new(seen)
+      )
+    stash.exec('SELECT * FROM book')
+    stash.exec('UPDATE public.book SET title = $1', ['y'])
+    stash.exec('SELECT * FROM book')
+    assert_equal(3, seen.size, 'a write to public.book must invalidate what was read from book')
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
