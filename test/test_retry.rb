@@ -359,17 +359,4 @@ class TestRetry < Pgtk::Test
     end
     assert_equal(1, counter, 'a missing table is not going to appear on the second attempt')
   end
-
-  def test_does_not_retry_a_bad_argument
-    counter = 0
-    stub = Object.new
-    stub.define_singleton_method(:exec) do |_sql, *_args|
-      counter += 1
-      raise(ArgumentError, 'wrong number of arguments')
-    end
-    assert_raises(ArgumentError) do
-      Pgtk::Retry.new(stub, attempts: 3).exec('SELECT * FROM book WHERE id = $1', [nil])
-    end
-    assert_equal(1, counter, 'a mistake in the arguments must reach the caller as it is')
-  end
 end

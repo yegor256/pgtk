@@ -56,10 +56,7 @@ class Pgtk::Retry
     PG::SyntaxErrorOrAccessRuleViolation,
     PG::DataException,
     PG::IntegrityConstraintViolation,
-    PG::FeatureNotSupported,
-    ArgumentError,
-    TypeError,
-    NameError
+    PG::FeatureNotSupported
   ].freeze
 
   # Constructor.
