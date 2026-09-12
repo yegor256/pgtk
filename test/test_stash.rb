@@ -893,6 +893,48 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_never_caches_a_locking_select
+    [
+      'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+      'SELECT * FROM orders WHERE id = $1 FOR NO KEY UPDATE',
+      'SELECT * FROM orders WHERE id = $1 FOR SHARE',
+      'SELECT * FROM orders WHERE id = $1 for key share'
+    ].each do |sql|
+      seen = []
+      stash =
+        Pgtk::Stash.new(
+          Class.new do
+            define_method(:initialize) { |log| @log = log }
+            define_method(:exec) do |query, _args = [], _result = 0|
+              @log << query
+              [{ 'id' => 1 }]
+            end
+          end.new(seen)
+        )
+      stash.exec(sql, [1])
+      stash.exec(sql, [1])
+      assert_equal(2, seen.size, "#{sql} must reach the server every time, or the lock is never taken")
+    end
+  end
+
+  def test_caches_a_select_that_only_mentions_for
+    seen = []
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          define_method(:initialize) { |log| @log = log }
+          define_method(:exec) do |query, _args = [], _result = 0|
+            @log << query
+            [{ 'id' => 1 }]
+          end
+        end.new(seen)
+      )
+    sql = 'SELECT * FROM orders WHERE reason = $1'
+    stash.exec(sql, ['for update'])
+    stash.exec(sql, ['for update'])
+    assert_equal(1, seen.size, 'an ordinary SELECT must still be cached')
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)

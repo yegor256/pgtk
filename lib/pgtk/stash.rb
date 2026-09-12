@@ -48,13 +48,15 @@ class Pgtk::Stash
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
 
+  LOCKS_RE = /\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)(?:\s|;|$)/i
+
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
     LOCALTIMESTAMP|LOCALTIME|RANDOM|GEN_RANDOM_UUID|
     CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :LOCKS_RE, :NONDETERMINISTIC
 
   # Initialize a new Stash with query caching.
   #
@@ -133,12 +135,17 @@ class Pgtk::Stash
 
   # Execute a SQL query with optional caching.
   #
+  # A SELECT that asks for a row lock (+FOR UPDATE+ and its siblings) is
+  # never cached, since a cached answer would hand back rows without taking
+  # the lock the caller asked for.
+  #
   # @param [String, Array<String>] query The SQL query
   # @param [Array] params Query parameters
   # @param [Integer] result Result format code
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
+    return @pool.exec(pure, params, result) if LOCKS_RE.match?(pure)
     if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
