@@ -481,6 +481,20 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_refuses_a_non_positive_max
+    [0, -1].each do |max|
+      assert_includes(
+        assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, max:) }.message,
+        'must be a positive integer',
+        "the pool of #{max} connections can never execute a query, it must not be built"
+      )
+    end
+  end
+
+  def test_refuses_a_max_that_is_not_an_integer
+    assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, max: 'four') }
+  end
+
   private
 
   def fake_pgsql(dir, id, port)
