@@ -70,6 +70,9 @@ class Pgtk::Pool
   def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
     @wire = wire
     @max = max
+    unless timeout.is_a?(Numeric) && timeout.positive?
+      raise(ArgumentError, "The timeout must be a positive number of seconds, while #{timeout.inspect} provided")
+    end
     @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
