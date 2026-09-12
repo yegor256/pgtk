@@ -37,7 +37,7 @@ class Pgtk::Wire::Env
   def connection
     uri = URI(@value)
     Pgtk::Wire::Direct.new(
-      host: CGI.unescape(uri.host),
+      host: CGI.unescape(uri.hostname),
       port: uri.port || 5432,
       dbname: CGI.unescape(uri.path[1..]),
       user: CGI.unescape(uri.userinfo.split(':')[0]),

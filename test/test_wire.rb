@@ -115,4 +115,19 @@ class TestWire < Pgtk::Test
       )
     end
   end
+
+  def test_unbrackets_an_ipv_six_host
+    ENV['DATABASE_URL_IPV6'] = 'postgres://jeff:swordfish@[::1]:5432/testdb'
+    host = nil
+    Pgtk::Wire.stub_const(
+      :Direct,
+      Class.new do
+        define_method(:initialize) { |**opts| host = opts[:host] }
+        define_method(:connection) { host }
+      end
+    ) do
+      Pgtk::Wire::Env.new('DATABASE_URL_IPV6').connection
+    end
+    assert_equal('::1', host, 'libpq expects an IPv6 literal without the brackets the URL carries')
+  end
 end
