@@ -115,4 +115,45 @@ class TestWire < Pgtk::Test
       )
     end
   end
+
+  def test_omits_credentials_when_url_has_no_userinfo
+    ENV['DATABASE_URL_NO_USER'] = 'postgres://localhost:5432/testdb'
+    args = captured { Pgtk::Wire::Env.new('DATABASE_URL_NO_USER').connection }
+    assert_nil(args[:user], 'a URL without userinfo must pass no user to libpq')
+    assert_nil(args[:password], 'a URL without userinfo must pass no password to libpq')
+    assert_equal('testdb', args[:dbname], args.to_s)
+  end
+
+  def test_takes_a_user_without_a_password
+    ENV['DATABASE_URL_NO_PASSWORD'] = 'postgres://jeff@localhost:5432/testdb'
+    args = captured { Pgtk::Wire::Env.new('DATABASE_URL_NO_PASSWORD').connection }
+    assert_equal('jeff', args[:user], args.to_s)
+    assert_nil(args[:password], 'a URL without a password must pass no password to libpq')
+  end
+
+  def test_complains_when_the_database_name_is_absent
+    ENV['DATABASE_URL_NO_DBNAME'] = 'postgres://localhost:5432'
+    assert_includes(
+      assert_raises(ArgumentError) { Pgtk::Wire::Env.new('DATABASE_URL_NO_DBNAME').connection }.message,
+      'database name is absent',
+      'a URL without a database name must be reported, not crash in CGI.unescape'
+    )
+  end
+
+  private
+
+  def captured(&)
+    args = {}
+    Pgtk::Wire.stub_const(
+      :Direct,
+      Class.new do
+        define_method(:initialize) do |**opts|
+          args.replace(opts)
+        end
+        define_method(:connection) { args }
+      end,
+      &
+    )
+    args
+  end
 end

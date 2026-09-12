@@ -34,14 +34,22 @@ class Pgtk::Wire::Env
   end
 
   # Create a new connection to PostgreSQL server.
+  #
+  # The credentials may be omitted from the URL, as in
+  # +postgres://localhost/db+. In that case +nil+ is passed to libpq, which
+  # then takes the user name and the password from its own environment.
   def connection
     uri = URI(@value)
+    raise(ArgumentError, "The host is absent in #{@value.inspect}") if uri.host.nil? || uri.host.empty?
+    dbname = uri.path.to_s[1..]
+    raise(ArgumentError, "The database name is absent in #{@value.inspect}") if dbname.nil? || dbname.empty?
+    user, password = uri.userinfo.to_s.split(':', 2)
     Pgtk::Wire::Direct.new(
       host: CGI.unescape(uri.host),
       port: uri.port || 5432,
-      dbname: CGI.unescape(uri.path[1..]),
-      user: CGI.unescape(uri.userinfo.split(':')[0]),
-      password: CGI.unescape(uri.userinfo.split(':')[1]),
+      dbname: CGI.unescape(dbname),
+      user: user.nil? ? nil : CGI.unescape(user),
+      password: password.nil? ? nil : CGI.unescape(password),
       **(uri.query ? URI.decode_www_form(uri.query).to_h.transform_keys(&:to_sym) : {}).merge(@opts)
     ).connection
   end
