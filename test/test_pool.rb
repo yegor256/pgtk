@@ -481,6 +481,20 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_refuses_a_non_positive_timeout
+    [0, -1].each do |timeout|
+      assert_includes(
+        assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, timeout:) }.message,
+        'must be a positive number',
+        "the timeout of #{timeout} makes every checkout busy at once, it must not be accepted"
+      )
+    end
+  end
+
+  def test_refuses_a_timeout_that_is_not_a_number
+    assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, timeout: nil) }
+  end
+
   private
 
   def fake_pgsql(dir, id, port)
