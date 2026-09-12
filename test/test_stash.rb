@@ -893,6 +893,42 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_routes_a_lowercase_write_as_a_write
+    seen = []
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          define_method(:initialize) { |log| @log = log }
+          define_method(:exec) do |query, _args = [], _result = 0|
+            @log << query
+            [{ 'title' => 'x' }]
+          end
+        end.new(seen)
+      )
+    stash.exec('select * from book')
+    stash.exec('select * from book')
+    assert_equal(1, seen.size, 'the second read must come from the cache')
+    stash.exec('insert into book (title) values ($1)', ['x'])
+    stash.exec('select * from book')
+    assert_equal(3, seen.size, 'a lowercase INSERT must invalidate the cached read, as an uppercase one does')
+  end
+
+  def test_takes_a_lowercase_write_without_complaining
+    stash =
+      Pgtk::Stash.new(
+        Class.new do
+          def exec(_query, _args = [], _result = 0)
+            [{ 'title' => 'x' }]
+          end
+        end.new
+      )
+    [
+      'insert into book (title) values ($1)',
+      'update book set title = $1',
+      'delete from book where title = $1'
+    ].each { |sql| stash.exec(sql, ['x']) }
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
