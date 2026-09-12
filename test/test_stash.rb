@@ -893,6 +893,17 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_readme_passes_only_known_keywords
+    allowed = Pgtk::Stash.instance_method(:initialize).parameters.filter_map { |type, name| name if type == :key }
+    snippets = File.read(File.join(__dir__, '../README.md')).scan(/```ruby[^`]*Pgtk::Stash\.new\([^`]*```/m)
+    refute_empty(snippets, 'the README must show how to configure the stash')
+    snippets.each do |snippet|
+      snippet.scan(/^\s+([a-z_]+):/) do |(kw)|
+        assert_includes(allowed, kw.to_sym, "the README passes #{kw}: which Pgtk::Stash does not accept")
+      end
+    end
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
