@@ -298,14 +298,14 @@ You can configure `Stash` with optional parameters:
 ```ruby
 stash = Pgtk::Stash.new(
   pgsql,
-  cap: 10_000,          # Maximum cached query results (default: 10,000)
-  cap_interval: 60,     # Seconds between cache size enforcement (default: 60)
-  refill_interval: 16,  # Seconds between stale query refilling (default: 16)
-  refill_delay: 0.5,    # Seconds to wait before refilling the cache
-  retire: 60,           # Maximum age in seconds to keep a query in cache
-  retire_interval: 5.5, # How often to retire (default: 60)
-  threads: 4,           # Worker threads for background refilling (default: 4)
-  max_queue_length: 128 # Maximum refilling tasks in queue (default: 128)
+  cap: 10_000,     # Maximum cached query results (default: 10,000)
+  capping: 60,     # Seconds between cache size enforcement (default: 60)
+  refill: 16,      # Seconds between stale query refilling (default: 16)
+  delay: 0.5,      # Seconds to wait before refilling the cache
+  retire: 60,      # Maximum age in seconds to keep a query in cache
+  retirement: 5.5, # How often to retire (default: 60)
+  threads: 4,      # Worker threads for background refilling (default: 4)
+  maxqueue: 128    # Maximum refilling tasks in queue (default: 128)
 )
 ```
 
