@@ -69,6 +69,9 @@ class Pgtk::Pool
   # @param [Object] log The log
   def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
     @wire = wire
+    unless max.is_a?(Integer) && max.positive?
+      raise(ArgumentError, "The max size of the pool must be a positive integer, while #{max.inspect} provided")
+    end
     @max = max
     @idle = idle
     @log = log
