@@ -163,6 +163,22 @@ class TestImpatient < Pgtk::Test
     end
   end
 
+  def test_resets_timeout_when_excluded_query_fails
+    fake_pool do |pool|
+      captured = []
+      spy = Pgtk::Spy.new(pool) { |sql, _| captured << sql }
+      assert_raises(PG::UndefinedColumn) do
+        Pgtk::Impatient.new(spy, 1, /^SELECT missing_column/, default: 7).exec(
+          'SELECT missing_column FROM book'
+        )
+      end
+      assert_equal(
+        ['SET statement_timeout = 7000', 'RESET statement_timeout'],
+        captured
+      )
+    end
+  end
+
   def test_does_not_leave_orphan_backend_after_timeout
     fake_pool(2, options: '-c statement_timeout=300') do |pool|
       tag = SecureRandom.hex(8)
