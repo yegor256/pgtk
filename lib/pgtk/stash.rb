@@ -276,19 +276,20 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
-    ret = @stash.dig(:queries, pure, params, :ret)
-    if ret.nil? || @stash.dig(:queries, pure, params, :stale)
+    key = immutable(params)
+    ret = @stash.dig(:queries, pure, key, :ret)
+    if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, params, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
+      cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
     end
-    bump(pure, params) if @stash.dig(:queries, pure, params)
+    bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
   end
 
-  def cache(pure, params, result, ret, tables, marks)
+  def cache(pure, key, result, ret, tables, marks)
     raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
     @entrance.with_write_lock do
       tables.each do |t|
@@ -296,9 +297,9 @@ class Pgtk::Stash
         @stash[:tables][t].append(pure).uniq!
       end
       @stash[:queries][pure] ||= {}
-      existing = @stash[:queries][pure][params]
+      existing = @stash[:queries][pure][key]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
-      entry = { ret:, params:, result:, used: Time.now }
+      entry = { ret:, params: key, result:, used: Time.now }
       entry[:stale] =
         if existing && existing[:stale]
           existing[:stale]
@@ -307,7 +308,20 @@ class Pgtk::Stash
         end
       entry.delete(:stale) if entry[:stale].nil?
       entry[:popularity] = (existing && existing[:popularity]) || Concurrent::AtomicFixnum.new
-      @stash[:queries][pure][params] = entry
+      @stash[:queries][pure][key] = entry
+    end
+  end
+
+  def immutable(value)
+    case value
+    when Array
+      value.map { |item| immutable(item) }.freeze
+    when Hash
+      value.to_h { |key, item| [immutable(key), immutable(item)] }.freeze
+    when String
+      value.dup.freeze
+    else
+      value
     end
   end
 

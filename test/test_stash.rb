@@ -212,6 +212,21 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_snapshots_mutable_params_for_cache_key
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      params = ['Elegant Objects']
+      query = 'SELECT * FROM book WHERE title = $1'
+      assert_same(
+        stash.exec(query, params),
+        params.tap do |values|
+          values[0] = 'Different Title'
+          values[0] = 'Elegant Objects'
+        end.then { stash.exec(query, params) }
+      )
+    end
+  end
+
   def test_query_with_semicolon
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
