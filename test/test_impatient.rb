@@ -168,14 +168,9 @@ class TestImpatient < Pgtk::Test
       captured = []
       spy = Pgtk::Spy.new(pool) { |sql, _| captured << sql }
       assert_raises(PG::UndefinedColumn) do
-        Pgtk::Impatient.new(spy, 1, /^SELECT missing_column/, default: 7).exec(
-          'SELECT missing_column FROM book'
-        )
+        Pgtk::Impatient.new(spy, 1, /^SELECT missing_column/, default: 7).exec('SELECT missing_column FROM book')
       end
-      assert_equal(
-        ['SET statement_timeout = 7000', 'RESET statement_timeout'],
-        captured
-      )
+      assert_equal(['SET statement_timeout = 7000', 'RESET statement_timeout'], captured)
     end
   end
 
