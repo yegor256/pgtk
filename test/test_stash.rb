@@ -76,12 +76,14 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_treats_postgres_write_commands_as_modifications
-    pool = Object.new
-    def pool.exec(*)
-      []
-    end
-    stash = Pgtk::Stash.new(pool)
+  def test_postgres_write_commands
+    stash = Pgtk::Stash.new(
+      Object.new.tap do |pool|
+        def pool.exec(*)
+          []
+        end
+      end
+    )
     [
       'CALL refresh_accounts()',
       'REFRESH MATERIALIZED VIEW account_totals',
