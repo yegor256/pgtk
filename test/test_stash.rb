@@ -76,6 +76,38 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_every_table_in_multi_table_drop
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM second_table'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('DROP TABLE first_table, second_table')
+    stash.exec(query)
+    assert_equal(3, calls, 'DROP TABLE must invalidate cached queries for every table')
+  end
+
+  def test_invalidates_every_table_in_multi_table_truncate
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM second_table'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('TRUNCATE first_table, second_table')
+    stash.exec(query)
+    assert_equal(3, calls, 'TRUNCATE must invalidate cached queries for every table')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
