@@ -76,6 +76,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_tracks_table_after_only_in_from_clause
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM ONLY accounts'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('UPDATE accounts SET name = name')
+    stash.exec(query)
+    assert_equal(3, calls, 'FROM ONLY must track the actual table for invalidation')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
