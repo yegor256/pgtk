@@ -149,6 +149,26 @@ class TestRetry < Pgtk::Test
     end
   end
 
+  def test_handles_select_with_leading_sql_comments
+    fake_pool do |pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |sql, *args|
+        counter += 1
+        raise(PG::Error, 'Connection lost') if counter < 2
+        pool.exec(sql, *args)
+      end
+      assert_equal(
+        '3',
+        Pgtk::Retry.new(stub, attempts: 3).exec("-- report\n/* details */ SELECT 3 as value").first['value']
+      )
+      assert_equal(2, counter)
+    end
+  end
+
   def test_handles_select_case_insensitive
     fake_pool do |pool|
       counter = 0
