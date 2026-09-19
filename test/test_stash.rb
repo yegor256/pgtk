@@ -76,6 +76,19 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_treats_postgres_write_commands_as_modifications
+    pool = Object.new
+    def pool.exec(*)
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    [
+      'CALL refresh_accounts()',
+      'REFRESH MATERIALIZED VIEW account_totals',
+      'MERGE INTO accounts USING account_updates ON accounts.id = account_updates.id'
+    ].each { |query| stash.exec(query) }
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
