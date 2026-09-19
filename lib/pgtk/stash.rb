@@ -36,7 +36,7 @@ require_relative '../pgtk'
 class Pgtk::Stash
   MODS = %w[
     INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK
-    REINDEX TRUNCATE CREATE ALTER DROP SET START
+    REINDEX TRUNCATE CREATE ALTER DROP SET START CALL REFRESH MERGE
   ].freeze
   MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
   WITH_RE = /\AWITH(\s|$)/
