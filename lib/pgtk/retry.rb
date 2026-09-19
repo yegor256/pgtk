@@ -110,12 +110,22 @@ class Pgtk::Retry
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
-      raise(e) unless query.strip.upcase.start_with?('SELECT')
+      raise(e) unless select?(query)
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
       retry
     end
+  end
+
+  # Whether the query is a SELECT after leading SQL comments are removed.
+  # @param [String] query SQL query
+  # @return [Boolean] true when the query starts with SELECT
+  def select?(query)
+    query
+      .gsub(/\A(?:\s*(?:--[^\n]*(?:\n|$)|\/\*.*?\*\/))*\s*/m, '')
+      .upcase
+      .start_with?('SELECT')
   end
 
   # Run a transaction without retry logic.
