@@ -76,6 +76,19 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_does_not_cache_sequence_functions
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    stash.exec("SELECT nextval('events_id_seq')")
+    stash.exec("SELECT nextval('events_id_seq')")
+    assert_equal(2, calls, 'sequence functions must not be served from the read cache')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
