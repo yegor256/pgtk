@@ -76,6 +76,17 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_preserves_whitespace_inside_sql_strings
+    received = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |query, *|
+      received << query
+      []
+    end
+    Pgtk::Stash.new(pool).exec("SELECT * FROM accounts WHERE note = 'a   b'")
+    assert_equal("SELECT * FROM accounts WHERE note = 'a   b'", received.first)
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

@@ -138,7 +138,7 @@ class Pgtk::Stash
   # @param [Integer] result Result format code
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
-    pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
+    pure = (query.is_a?(Array) ? query.join(' ') : query).strip
     if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
