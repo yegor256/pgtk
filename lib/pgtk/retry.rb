@@ -122,10 +122,7 @@ class Pgtk::Retry
   # @param [String] query SQL query
   # @return [Boolean] true when the query starts with SELECT
   def select?(query)
-    query
-      .gsub(/\A(?:\s*(?:--[^\n]*(?:\n|$)|\/\*.*?\*\/))*\s*/m, '')
-      .upcase
-      .start_with?('SELECT')
+    query.gsub(%r{\A(?:\s*(?:--[^\n]*(?:\n|$)|/\*.*?\*/))*\s*}m, '').upcase.start_with?('SELECT')
   end
 
   # Run a transaction without retry logic.

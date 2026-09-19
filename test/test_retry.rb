@@ -161,8 +161,10 @@ class TestRetry < Pgtk::Test
         raise(PG::Error, 'Connection lost') if counter < 2
         pool.exec(sql, *args)
       end
-      query = "-- report\n/* details */ SELECT 3 as value"
-      assert_equal('3', Pgtk::Retry.new(stub, attempts: 3).exec(query).first['value'])
+      assert_equal(
+        '3',
+        Pgtk::Retry.new(stub, attempts: 3).exec("-- report\n/* details */ SELECT 3 as value").first['value']
+      )
       assert_equal(2, counter)
     end
   end
