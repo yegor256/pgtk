@@ -92,7 +92,7 @@ class TestStash < Pgtk::Test
     assert_equal(3, calls, 'DROP TABLE must invalidate cached queries for every table')
   end
 
-  def test_invalidates_every_table_in_multi_table_truncate
+  def test_truncate_invalidates_all_tables
     calls = 0
     pool = Object.new
     pool.define_singleton_method(:exec) do |*|
