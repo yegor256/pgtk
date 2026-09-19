@@ -76,6 +76,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_table_created_by_select_into
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT value FROM temporary_snapshot'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('SELECT 1 AS value INTO temporary_snapshot')
+    stash.exec(query)
+    assert_equal(3, calls, 'SELECT INTO must invalidate cached reads of its target table')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

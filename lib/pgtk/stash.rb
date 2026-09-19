@@ -45,6 +45,7 @@ class Pgtk::Stash
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)")
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
 
@@ -54,7 +55,7 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :SELECT_INTO_RE, :READS_RE, :NONDETERMINISTIC
 
   # Initialize a new Stash with query caching.
   #
@@ -139,7 +140,7 @@ class Pgtk::Stash
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
+    if MODS_RE.match?(pure) || SELECT_INTO_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
       @pool.exec(pure, params, result)
@@ -250,7 +251,7 @@ class Pgtk::Stash
   end
 
   def modify(pure, params, result)
-    tables = pure.scan(ALTS_RE).flatten
+    tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
