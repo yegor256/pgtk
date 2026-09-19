@@ -44,9 +44,9 @@ class Pgtk::Stash
   IDENT = '[a-z_][a-z0-9_]*'
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s+(#{IDENT})(?=[^a-z0-9_]|$)")
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s+(#{IDENT})(?=\\s|;|$)")
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
