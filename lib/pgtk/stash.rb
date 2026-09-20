@@ -44,7 +44,7 @@ class Pgtk::Stash
   IDENT = '(?:[a-z_][a-z0-9_]*|"[^"]+")'
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|[\\s)])(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|,|;|$)")
   CLAUSE_RE = /
@@ -60,8 +60,8 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :CLAUSE_RE, :TABLE_RE,
-                   :NONDETERMINISTIC
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
+  private_constant :CLAUSE_RE, :TABLE_RE
 
   # Initialize a new Stash with query caching.
   #
