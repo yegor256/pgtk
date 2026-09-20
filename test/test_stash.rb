@@ -151,6 +151,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_caches_and_invalidates_quoted_table_names
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM "Accounts"'
+    first = stash.exec(query)
+    assert_same(first, stash.exec(query))
+    stash.exec('INSERT INTO "Accounts" (id) VALUES (1)')
+    refute_same(first, stash.exec(query))
+    assert_equal(3, calls)
+  end
+
   def test_query_with_semicolon
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

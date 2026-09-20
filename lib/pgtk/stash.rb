@@ -32,12 +32,12 @@ class Pgtk::Stash
   MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
   MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
 
-  IDENT = '[a-z_][a-z0-9_]*'
+  IDENT = '(?:[a-z_][a-z0-9_]*|"[^"]+")'
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|,|;|$)")
 
   SEPARATOR = ' --%*@#~($-- '
 
