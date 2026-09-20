@@ -51,7 +51,7 @@ require_relative 'pool/busy'
 # License:: MIT
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
-  READ_ONLY = /\A(?:SELECT\b|WITH\b(?:(?!\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b).)*\bSELECT\b.*)\z/im
+  READ_ONLY = /\A(?:SELECT\b.*|WITH\b(?:(?!\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b).)*\bSELECT\b.*)\z/im
 
   private_constant :READ_ONLY
 
