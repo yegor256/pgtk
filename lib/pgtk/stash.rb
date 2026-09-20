@@ -29,19 +29,23 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Stash
-  MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET MERGE REFRESH].freeze
+  MODS = %w[
+    INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX
+    TRUNCATE CREATE ALTER DROP SET MERGE REFRESH
+  ].freeze
   MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
 
   IDENT = '[a-z_][a-z0-9_]*'
 
-  ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'].freeze
+  ALTS = [
+    'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
+    'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
+  ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
 
-  SEPARATOR = ' --%*@#~($-- '
-
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :SEPARATOR
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -251,7 +255,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
-    key = params.join(SEPARATOR)
+    key = params.join(' --%*@#~($-- ')
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten

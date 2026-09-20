@@ -75,24 +75,22 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_write_like_statements_invalidate_their_target
+  def test_write_statements_invalidate_target
     pool = Object.new
     calls = []
-    pool.define_singleton_method(:exec) do |sql, *_args|
-      calls << sql
-      []
-    end
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
     stash = Pgtk::Stash.new(pool)
     query = 'SELECT count(*) FROM account_totals'
     stash.exec(query)
-    stash.exec('REFRESH MATERIALIZED VIEW account_totals')
-    stash.exec(query)
-    stash.exec('MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE')
-    stash.exec(query)
+    [
+      'REFRESH MATERIALIZED VIEW account_totals',
+      'MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE'
+    ].each { |statement| stash.exec(statement).tap { stash.exec(query) } }
     assert_equal(
-      [query, 'REFRESH MATERIALIZED VIEW account_totals', query,
-       'MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE', query],
-      calls
+      [
+        query, 'REFRESH MATERIALIZED VIEW account_totals', query,
+        'MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE', query
+      ], calls
     )
   end
 
