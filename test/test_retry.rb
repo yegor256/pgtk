@@ -177,8 +177,10 @@ class TestRetry < Pgtk::Test
       raise(PG::Error, 'Connection lost') if counter < 2
       [{ 'value' => 'commented' }]
     end
-    query = "/* report */\n-- details\nSELECT 'commented' AS value"
-    assert_equal('commented', Pgtk::Retry.new(stub, attempts: 3).exec(query).first['value'])
+    assert_equal(
+      'commented',
+      Pgtk::Retry.new(stub, attempts: 3).exec("/* report */\n-- details\nSELECT 'commented' AS value").first['value']
+    )
     assert_equal(2, counter)
   end
 

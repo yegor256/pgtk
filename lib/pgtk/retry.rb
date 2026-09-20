@@ -51,7 +51,7 @@ require_relative 'pool/busy'
 # License:: MIT
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
-  LEADING_COMMENTS = /\A(?:(?:\s+)|(?:--[^\n]*(?:\n|\z))|(?:\/\*.*?\*\/))*/m
+  LEADING_COMMENTS = %r{\A(?:(?:\s+)|(?:--[^\n]*(?:\n|\z))|(?:/\*.*?\*/))*}m
 
   DETERMINISTIC = [
     PG::SyntaxErrorOrAccessRuleViolation,
@@ -122,7 +122,7 @@ class Pgtk::Retry
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) if DETERMINISTIC.any? { |k| e.is_a?(k) }
-      raise(e) unless read_only?(query)
+      raise(e) unless query.sub(LEADING_COMMENTS, '').strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
@@ -136,12 +136,6 @@ class Pgtk::Retry
   # @return [Object] Result of the block
   def transaction(&)
     @pool.transaction(&)
-  end
-
-  private
-
-  def read_only?(query)
-    query.sub(LEADING_COMMENTS, '').strip.upcase.start_with?('SELECT')
   end
 end
 
