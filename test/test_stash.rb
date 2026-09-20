@@ -75,6 +75,17 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_call_is_executed_as_a_modification
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      []
+    end
+    Pgtk::Stash.new(pool).exec('CALL add_account()')
+    assert_equal(['CALL add_account()'], calls)
+  end
+
   def test_caching
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

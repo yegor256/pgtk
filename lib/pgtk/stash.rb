@@ -29,7 +29,7 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Stash
-  MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
+  MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET CALL].freeze
   MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
 
   IDENT = '[a-z_][a-z0-9_]*'
