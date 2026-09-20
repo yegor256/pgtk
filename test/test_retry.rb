@@ -67,8 +67,10 @@ class TestRetry < Pgtk::Test
       raise(PG::Error, 'Connection lost') if counter == 1
       [{ 'value' => '1' }]
     end
-    query = 'WITH rows AS (SELECT 1 AS value) SELECT * FROM rows'
-    assert_equal('1', Pgtk::Retry.new(stub, attempts: 3).exec(query).first['value'])
+    assert_equal(
+      '1',
+      Pgtk::Retry.new(stub, attempts: 3).exec('WITH rows AS (SELECT 1 AS value) SELECT * FROM rows').first['value']
+    )
     assert_equal(2, counter)
   end
 
