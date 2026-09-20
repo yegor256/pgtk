@@ -187,6 +187,40 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_rollback_does_not_cache
+    rows = [{ 'id' => '1' }]
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      if sql.start_with?('SELECT')
+        rows.map(&:dup)
+      else
+        []
+      end
+    end
+    pool.define_singleton_method(:transaction) do |&block|
+      txrows = rows.map(&:dup)
+      tx = Object.new
+      tx.define_singleton_method(:exec) do |sql, *_args|
+        if sql.start_with?('SELECT')
+          txrows.map(&:dup)
+        else
+          txrows << { 'id' => '2' }
+          []
+        end
+      end
+      block.call(tx).tap { rows.replace(txrows) }
+    end
+    stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+    assert_raises(StandardError) do
+      stash.transaction do |tx|
+        tx.exec('INSERT INTO users VALUES (2)')
+        assert_equal(%w[1 2], tx.exec('SELECT * FROM users').map { |row| row['id'] })
+        raise(StandardError, 'rollback')
+      end
+    end
+    assert_equal(%w[1], stash.exec('SELECT * FROM users').map { |row| row['id'] })
+  end
+
   def test_start
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

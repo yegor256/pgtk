@@ -28,7 +28,7 @@ require_relative '../pgtk'
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
-class Pgtk::Stash
+class Pgtk::Stash # rubocop:disable Metrics/ClassLength
   MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
   MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
 
@@ -59,11 +59,13 @@ class Pgtk::Stash
   # @param [Float] retirement Interval in seconds between retirement tasks
   # @param [Loog] loog Logger instance
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
+  # @param [Boolean] cache Whether to cache reads in this stash
   def initialize(
     pool,
     stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
+    cache: true,
     refill: 16,
     delay: 0,
     maxqueue: 128,
@@ -79,6 +81,7 @@ class Pgtk::Stash
     @stash[:table_inflight] ||= {}
     @loog = loog
     @entrance = entrance
+    @cache = cache
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
@@ -134,8 +137,8 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
-    end
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, cache: false))
+    end.tap { invalidate! }
   end
 
   private
@@ -251,6 +254,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
+    return @pool.exec(pure, params, result) unless @cache
     key = params.join(SEPARATOR)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
@@ -262,6 +266,15 @@ class Pgtk::Stash
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
+  end
+
+  def invalidate!
+    now = Time.now
+    @entrance.with_write_lock do
+      @stash[:queries].each_value do |entries|
+        entries.each_value { |entry| entry[:stale] = now }
+      end
+    end
   end
 
   def cache(pure, key, params, result, ret, tables, marks)
