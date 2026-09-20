@@ -57,13 +57,14 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def config
     yml = @yaml
     return yml if yml.is_a?(Hash)
-    YAML.load_file(
+    file =
       if @yaml.is_a?(Array)
-        @yaml.drop_while { |f| !File.exist?(f) }.first
+        @yaml.find { |candidate| File.exist?(candidate) }
       else
         @yaml
       end
-    )
+    raise(ArgumentError, "No YAML configuration file found among #{Array(@yaml).join(', ')}") if file.nil?
+    YAML.load_file(file)
   end
 
   def validate(yml)
