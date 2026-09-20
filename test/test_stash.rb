@@ -182,6 +182,20 @@ class TestStash < Pgtk::Test
     assert_equal(3, calls)
   end
 
+  def test_does_not_cache_data_modifying_cte
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'WITH source AS (SELECT 1 AS id)INSERT INTO target (id) SELECT id FROM source'
+    stash.exec(query)
+    stash.exec(query)
+    assert_equal(2, calls)
+  end
+
   def test_query_with_semicolon
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
