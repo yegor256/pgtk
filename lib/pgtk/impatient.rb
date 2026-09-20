@@ -143,6 +143,8 @@ class Pgtk::Impatient
       t.exec("SET LOCAL idle_in_transaction_session_timeout = #{ms}")
       yield(t)
     end
+  rescue PG::QueryCanceled
+    raise(TooSlow, "SQL transaction was terminated after #{@timeout}s of waiting")
   end
 end
 
