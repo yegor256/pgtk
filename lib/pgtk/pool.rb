@@ -232,7 +232,7 @@ class Pgtk::Pool
       end
     ensure
       conn.instance_variable_set(:@pgtk_last_used, Time.now) if @idle && !conn.finished?
-      @pool.push(conn)
+      @pool.push(conn) unless conn.finished?
     end
   end
 
