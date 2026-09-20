@@ -82,8 +82,11 @@ class Pgtk::Spy
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
   def exec(sql, *)
-    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - Time.now)
-    @pool.exec(sql, *)
+    Time.now.then do |started|
+      @pool.exec(sql, *).tap do
+        @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - started)
+      end
+    end
   end
 
   # Run a transaction with spying on each SQL query.
