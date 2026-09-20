@@ -28,7 +28,7 @@ require_relative '../pgtk'
 # Author:: Yegor Bugayenko (yegor256@gmail.com)
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
-class Pgtk::Stash
+class Pgtk::Stash # rubocop:disable Metrics/ClassLength
   MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET].freeze
   MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
 
@@ -38,10 +38,16 @@ class Pgtk::Stash
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|,|;|$)")
+  CLAUSE_RE = /
+    (?:\bFROM|\bJOIN)\s+
+    (.+?)
+    (?=\b(?:WHERE|GROUP|ORDER|LIMIT|OFFSET|HAVING|UNION|RETURNING|ON|JOIN)\b|;|\z)
+  /imx
+  TABLE_RE = /(?:\A|,)\s*(#{IDENT})/i
 
   SEPARATOR = ' --%*@#~($-- '
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :SEPARATOR
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :CLAUSE_RE, :TABLE_RE, :SEPARATOR
 
   # Initialize a new Stash with query caching.
   #
@@ -254,14 +260,21 @@ class Pgtk::Stash
     key = params.join(SEPARATOR)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-      tables = pure.scan(READS_RE).flatten
-      tables.uniq!
-      marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
+      found = tables(pure)
+      marks = found.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
+      cache(pure, key, params, result, ret, found, marks) unless pure.include?(' NOW() ')
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
+  end
+
+  def tables(query)
+    names = query.scan(READS_RE).flatten
+    query.scan(CLAUSE_RE) do |clause|
+      names.concat(clause.first.scan(TABLE_RE).flatten)
+    end
+    names.uniq
   end
 
   def cache(pure, key, params, result, ret, tables, marks)
@@ -388,8 +401,7 @@ class Pgtk::Stash
   end
 
   def replenish(query)
-    tables = query.scan(READS_RE).flatten
-    tables.uniq!
+    tables = tables(query)
     pinned = nil
     snapshot =
       @entrance.with_read_lock do

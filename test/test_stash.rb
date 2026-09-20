@@ -167,6 +167,21 @@ class TestStash < Pgtk::Test
     assert_equal(3, calls)
   end
 
+  def test_tracks_comma_tables
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT a.id, b.id FROM accounts a, profiles b'
+    stash.exec(query)
+    stash.exec('INSERT INTO profiles (id) VALUES (1)')
+    stash.exec(query)
+    assert_equal(3, calls)
+  end
+
   def test_query_with_semicolon
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
