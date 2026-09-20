@@ -82,7 +82,7 @@ class Pgtk::Spy
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
   def exec(sql, *)
-    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - Time.now)
+    report(sql.is_a?(Array) ? sql.join(' ') : sql)
     @pool.exec(sql, *)
   end
 
@@ -92,7 +92,19 @@ class Pgtk::Spy
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Spy.new(t, &@block))
+      report('START TRANSACTION')
+      begin
+        yield(Pgtk::Spy.new(t, &@block)).tap { report('COMMIT') }
+      rescue StandardError
+        report('ROLLBACK')
+        raise
+      end
     end
+  end
+
+  private
+
+  def report(sql)
+    @block&.call(sql, 0.0)
   end
 end
