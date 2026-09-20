@@ -159,6 +159,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_table_created_by_select_into
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT value FROM temporary_snapshot'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('SELECT 1 AS value INTO temporary_snapshot')
+    stash.exec(query)
+    assert_equal([query, 'SELECT 1 AS value INTO temporary_snapshot', query], calls)
+  end
+
   def test_raise_no_tables_error
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
