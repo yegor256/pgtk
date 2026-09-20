@@ -51,6 +51,7 @@ require_relative 'pool/busy'
 # License:: MIT
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
+  LEADING_COMMENTS = %r{\A(?:(?:\s+)|(?:--[^\n]*(?:\n|\z))|(?:/\*.*?\*/))*}m
 
   # Constructor.
   #
@@ -110,7 +111,7 @@ class Pgtk::Retry
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
-      raise(e) unless query.strip.upcase.start_with?('SELECT')
+      raise(e) unless query.sub(LEADING_COMMENTS, '').strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)

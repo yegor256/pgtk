@@ -166,6 +166,24 @@ class TestRetry < Pgtk::Test
     end
   end
 
+  def test_handles_select_after_sql_comments
+    stub = Object.new
+    def stub.version
+      'stub'
+    end
+    counter = 0
+    stub.define_singleton_method(:exec) do |_sql, *_args|
+      counter += 1
+      raise(PG::Error, 'Connection lost') if counter < 2
+      [{ 'value' => 'commented' }]
+    end
+    assert_equal(
+      'commented',
+      Pgtk::Retry.new(stub, attempts: 3).exec("/* report */\n-- details\nSELECT 'commented' AS value").first['value']
+    )
+    assert_equal(2, counter)
+  end
+
   def test_handles_array_sql
     fake_pool do |pool|
       counter = 0
