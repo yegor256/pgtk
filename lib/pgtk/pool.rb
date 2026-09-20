@@ -68,6 +68,7 @@ class Pgtk::Pool
   #   a connection on checkout, or +nil+ to disable validation
   # @param [Object] log The log
   def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
+    raise(ArgumentError, 'Timeout must be non-negative') if timeout.negative?
     @wire = wire
     @max = max
     @idle = idle
