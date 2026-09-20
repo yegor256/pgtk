@@ -43,7 +43,10 @@ class Pgtk::Stash
 
   IDENT = '[a-z_][a-z0-9_]*'
 
-  ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'].freeze
+  ALTS = [
+    'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
+    'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
+  ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
