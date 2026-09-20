@@ -73,12 +73,14 @@ class Pgtk::Stash
   # @param [Loog] loog Logger instance
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
   # @param [Array<String>] volatile Table names that must never be cached
+  # @param [Boolean] cache Whether to cache reads in this stash
   def initialize(
     pool,
     stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     volatile: [],
+    cache: true,
     refill: 16,
     delay: 0,
     maxqueue: 128,
@@ -97,6 +99,7 @@ class Pgtk::Stash
     @loog = loog
     @entrance = entrance
     @volatile = Array(volatile).map(&:to_s).freeze
+    @cache = cache
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
@@ -154,8 +157,10 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
-    end
+      yield(
+        Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile, cache: false)
+      )
+    end.tap { invalidate! }
   end
 
   # Run statements on a single connection, without a transaction.
@@ -276,6 +281,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
+    return @pool.exec(pure, params, result) unless @cache
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
@@ -287,6 +293,15 @@ class Pgtk::Stash
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
+  end
+
+  def invalidate!
+    now = Time.now
+    @entrance.with_write_lock do
+      @stash[:queries].each_value do |entries|
+        entries.each_value { |entry| entry[:stale] = now }
+      end
+    end
   end
 
   def cache(pure, key, result, ret, tables, marks)
