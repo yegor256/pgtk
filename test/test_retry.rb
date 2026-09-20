@@ -56,6 +56,24 @@ class TestRetry < Pgtk::Test
     end
   end
 
+  def test_retries_read_only_with_query_on_failure
+    counter = 0
+    stub = Object.new
+    def stub.version
+      'stub'
+    end
+    stub.define_singleton_method(:exec) do |_sql, *_args|
+      counter += 1
+      raise(PG::Error, 'Connection lost') if counter == 1
+      [{ 'value' => '1' }]
+    end
+    assert_equal(
+      '1',
+      Pgtk::Retry.new(stub, attempts: 3).exec('WITH rows AS (SELECT 1 AS value) SELECT * FROM rows').first['value']
+    )
+    assert_equal(2, counter)
+  end
+
   def test_fails_after_max_attempts
     fake_pool do |_pool|
       stub = Object.new
