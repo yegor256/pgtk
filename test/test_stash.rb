@@ -139,6 +139,16 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_tracks_table_after_only_keyword
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |_sql, *_args| [] }
+    stash = Pgtk::Stash.new(pool)
+    stash.exec('SELECT * FROM ONLY accounts')
+    tables = stash.instance_variable_get(:@stash)[:tables]
+    assert_includes(tables, 'accounts')
+    refute_includes(tables, 'ONLY')
+  end
+
   def test_caching_with_params
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
