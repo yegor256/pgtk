@@ -50,6 +50,9 @@ require_relative 'impatient'
 # License:: MIT
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
+  READ_ONLY = /\A(?:SELECT\b|WITH\b(?:(?!\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b).)*\bSELECT\b.*)\z/im
+
+  private_constant :READ_ONLY
 
   # Constructor.
   #
@@ -101,7 +104,7 @@ class Pgtk::Retry
     begin
       @pool.exec(sql, *)
     rescue StandardError, Pgtk::Impatient::TooSlow => e
-      raise(e) unless query.strip.upcase.start_with?('SELECT')
+      raise(e) unless READ_ONLY.match?(query.strip)
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
