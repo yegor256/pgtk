@@ -37,11 +37,11 @@ class Pgtk::Wire::Env
   def connection
     uri = URI(@value)
     Pgtk::Wire::Direct.new(
-      host: CGI.unescape(uri.host),
+      host: URI.decode_uri_component(uri.host),
       port: uri.port || 5432,
-      dbname: CGI.unescape(uri.path[1..]),
-      user: CGI.unescape(uri.userinfo.split(':')[0]),
-      password: CGI.unescape(uri.userinfo.split(':')[1]),
+      dbname: URI.decode_uri_component(uri.path.delete_prefix('/')),
+      user: uri.user && URI.decode_uri_component(uri.user),
+      password: uri.password && URI.decode_uri_component(uri.password),
       **(uri.query ? URI.decode_www_form(uri.query).to_h.transform_keys(&:to_sym) : {}).merge(@opts)
     ).connection
   end
