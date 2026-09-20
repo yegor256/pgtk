@@ -31,7 +31,7 @@ class Pgtk::Pool::Txn
     @conn.instance_variable_set(:@pgtk_started_at, start)
     begin
       out =
-        if args.empty?
+        if args.empty? && result.zero?
           @conn.exec(sql) do |res|
             if block_given?
               yield(res)
