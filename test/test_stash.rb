@@ -159,6 +159,21 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_all_tables_in_multi_drop
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM second_table'
+    stash.exec(query)
+    stash.exec('DROP TABLE first_table, second_table')
+    stash.exec(query)
+    assert_equal([query, 'DROP TABLE first_table, second_table', query], calls)
+  end
+
   def test_raise_no_tables_error
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
