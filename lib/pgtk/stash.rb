@@ -138,13 +138,14 @@ class Pgtk::Stash
   # @param [Integer] result Result format code
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
-    pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
+    sql = query.is_a?(Array) ? query.join(' ') : query
+    pure = sql.gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
-      modify(pure, params, result)
+      modify(sql, pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
-      @pool.exec(pure, params, result)
+      @pool.exec(sql, params, result)
     else
-      select(pure, params, result)
+      select(sql, pure, params, result)
     end
   end
 
@@ -249,13 +250,13 @@ class Pgtk::Stash
     items
   end
 
-  def modify(pure, params, result)
+  def modify(sql, pure, params, result)
     tables = pure.scan(ALTS_RE).flatten
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
     begin
-      @pool.exec(pure, params, result).tap do
+      @pool.exec(sql, params, result).tap do
         now = Time.now
         @entrance.with_write_lock do
           affected.each do |t|
@@ -275,21 +276,21 @@ class Pgtk::Stash
     end
   end
 
-  def select(pure, params, result)
+  def select(sql, pure, params, result)
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
-      ret = @pool.exec(pure, params, result)
-      cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
+      ret = @pool.exec(sql, params, result)
+      cache(sql, pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
   end
 
-  def cache(pure, key, result, ret, tables, marks)
+  def cache(sql, pure, key, result, ret, tables, marks)
     raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
     @entrance.with_write_lock do
       tables.each do |t|
@@ -299,7 +300,7 @@ class Pgtk::Stash
       @stash[:queries][pure] ||= {}
       existing = @stash[:queries][pure][key]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
-      entry = { ret:, params: key, result:, used: Time.now }
+      entry = { ret:, sql:, params: key, result:, used: Time.now }
       entry[:stale] =
         if existing && existing[:stale]
           existing[:stale]
@@ -477,14 +478,14 @@ class Pgtk::Stash
         @stash[:queries][query]&.filter_map do |k, h|
           next unless h[:stale]
           next if h[:stale] > Time.now - @delay
-          [k, h[:params], h[:result], h[:stale]]
+          [k, h[:sql] || query, h[:params], h[:result], h[:stale]]
         end
       end
     return unless snapshot
-    snapshot.each do |k, params, result, mark|
+    snapshot.each do |k, sql, params, result, mark|
       next if @tpool.queue_length >= @maxqueue
       @tpool.post do
-        ret = @pool.exec(query, params, result)
+        ret = @pool.exec(sql, params, result)
         @entrance.with_write_lock do
           h = @stash[:queries][query]&.dig(k)
           next unless h
