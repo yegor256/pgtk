@@ -251,7 +251,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
-    key = params.join(SEPARATOR)
+    key = [result, *params].join(SEPARATOR)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten
