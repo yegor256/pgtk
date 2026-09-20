@@ -50,6 +50,7 @@ require_relative 'impatient'
 # License:: MIT
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
+  LEADING_COMMENTS = /\A(?:(?:\s+)|(?:--[^\n]*(?:\n|\z))|(?:\/\*.*?\*\/))*/m
 
   # Constructor.
   #
@@ -101,7 +102,7 @@ class Pgtk::Retry
     begin
       @pool.exec(sql, *)
     rescue StandardError, Pgtk::Impatient::TooSlow => e
-      raise(e) unless query.strip.upcase.start_with?('SELECT')
+      raise(e) unless read_only?(query)
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
@@ -115,6 +116,12 @@ class Pgtk::Retry
   # @return [Object] Result of the block
   def transaction(&)
     @pool.transaction(&)
+  end
+
+  private
+
+  def read_only?(query)
+    query.sub(LEADING_COMMENTS, '').strip.upcase.start_with?('SELECT')
   end
 end
 
