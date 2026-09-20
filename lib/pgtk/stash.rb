@@ -45,7 +45,9 @@ class Pgtk::Stash
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
-  DROP_RE = Regexp.new("(?:^|\\s)DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?((?:#{IDENT}\\s*,\\s*)*#{IDENT})(?=\\s*(?:CASCADE|RESTRICT|;|$))", Regexp::IGNORECASE)
+  DROP_RE = /
+    (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
+  /ix
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
@@ -254,7 +256,7 @@ class Pgtk::Stash
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten
     dropped = pure.match(DROP_RE)
-    tables.concat(dropped[1].scan(/#{IDENT}/)) if dropped
+    tables.concat(dropped[1].scan(/[a-z_][a-z0-9_]*/o)) if dropped
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
