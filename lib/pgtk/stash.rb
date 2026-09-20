@@ -261,7 +261,7 @@ class Pgtk::Stash
       cache(pure, key, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
-    ret
+    copy(ret)
   end
 
   def cache(pure, key, params, result, ret, tables, marks)
@@ -283,6 +283,19 @@ class Pgtk::Stash
         end
       entry.delete(:stale) if entry[:stale].nil?
       @stash[:queries][pure][key] = entry
+    end
+  end
+
+  def copy(value)
+    case value
+    when Array
+      value.map { |item| copy(item) }
+    when Hash
+      value.to_h { |key, item| [key, copy(item)] }
+    when String
+      value.dup
+    else
+      value
     end
   end
 

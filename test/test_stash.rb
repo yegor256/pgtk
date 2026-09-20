@@ -82,7 +82,7 @@ class TestStash < Pgtk::Test
       first = stash.exec(query)
       second = stash.exec(query)
       assert_equal(first.to_a, second.to_a)
-      assert_same(first, second)
+      refute_same(first, second)
     end
   end
 
@@ -132,10 +132,10 @@ class TestStash < Pgtk::Test
       pool.exec('CREATE TABLE audit_log_2024 (id INTEGER PRIMARY KEY, msg TEXT NOT NULL)')
       stash = Pgtk::Stash.new(pool)
       query = 'SELECT msg FROM audit_log_2024 WHERE id = $1'
-      assert_same(
-        stash.exec(query, [1]), stash.exec(query, [1]),
-        'cannot cache a SELECT from a table whose name has a digit'
-      )
+      first = stash.exec(query, [1])
+      second = stash.exec(query, [1])
+      assert_equal(first.to_a, second.to_a)
+      refute_same(first, second, 'cached SELECT results must be copied for callers')
     end
   end
 
@@ -146,9 +146,24 @@ class TestStash < Pgtk::Test
       first = stash.exec(query, ['Elegant Objects'])
       second = stash.exec(query, ['Elegant Objects'])
       assert_equal(first.to_a, second.to_a)
-      assert_same(first, second)
+      refute_same(first, second)
       refute_same(first, stash.exec(query, ['Different Title']))
     end
+  end
+
+  def test_does_not_expose_cached_rows
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      [{ 'id' => '1' }]
+    end
+    stash = Pgtk::Stash.new(pool)
+    first = stash.exec('SELECT * FROM users')
+    first[0]['id'] = 'changed'
+    second = stash.exec('SELECT * FROM users')
+    assert_equal('1', second[0]['id'])
+    assert_equal(1, calls)
   end
 
   def test_query_with_semicolon
