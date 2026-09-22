@@ -99,4 +99,25 @@ class TestLiquibaseTask < Pgtk::Test
       assert_match('CREATE TABLE public.book', File.read(schema))
     end
   end
+
+  def test_complains_when_schema_needs_more_than_a_url
+    Dir.mktmpdir do |dir|
+      cfg = File.join(dir, 'cfg.yml')
+      File.write(
+        cfg,
+        YAML.dump('pgsql' => { 'url' => 'jdbc:postgresql://localhost:5432/test', 'user' => 'u', 'password' => 'p' })
+      )
+      Pgtk::LiquibaseTask.new(:liquibase_schema_only) do |t|
+        t.master = File.join(__dir__, '../test-resources/master.xml')
+        t.yaml = cfg
+        t.schema = File.join(dir, 'schema.sql')
+        t.quiet = true
+      end
+      assert_includes(
+        assert_raises(ArgumentError) { Rake::Task['liquibase_schema_only'].invoke }.message,
+        "The 'host' is not set",
+        'pg_dump needs a host, a port and a dbname, so they must be validated before it runs'
+      )
+    end
+  end
 end
