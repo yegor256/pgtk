@@ -67,6 +67,21 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_passes_result_format_without_parameters
+    calls = []
+    conn = Object.new
+    conn.define_singleton_method(:exec) do |sql|
+      calls << [:exec, sql]
+      []
+    end
+    conn.define_singleton_method(:exec_params) do |sql, args, result|
+      calls << [:exec_params, sql, args, result]
+      []
+    end
+    Pgtk::Pool::Txn.new(conn, Loog::NULL).exec('SELECT 1', [], 1)
+    assert_equal([[:exec_params, 'SELECT 1', [], 1]], calls)
+  end
+
   def test_logs_pgsql_errors_to_logger
     buf = Loog::Buffer.new
     fake_pool(log: buf) do |pool|
