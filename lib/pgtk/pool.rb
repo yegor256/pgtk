@@ -73,6 +73,9 @@ class Pgtk::Pool
       raise(ArgumentError, "The max size of the pool must be a positive integer, while #{max.inspect} provided")
     end
     @max = max
+    unless timeout.is_a?(Numeric) && timeout.positive?
+      raise(ArgumentError, "The timeout must be a positive number of seconds, while #{timeout.inspect} provided")
+    end
     @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
