@@ -32,7 +32,7 @@ class Pgtk::Wire::Yaml
   # Create a new connection to PostgreSQL server.
   def connection
     raise(ArgumentError, "The file #{@file.inspect} not found") unless File.exist?(@file)
-    cfg = ::YAML.load_file(@file)
+    cfg = ::YAML.safe_load_file(@file)
     raise(ArgumentError, "The node '#{@node}' not found in YAML file #{@file.inspect}") unless cfg[@node]
     Pgtk::Wire::Direct.new(
       host: cfg[@node]['host'],
