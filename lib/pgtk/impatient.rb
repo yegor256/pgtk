@@ -127,7 +127,11 @@ class Pgtk::Impatient
     if @off.any? { |re| re.match?(sql) }
       return @pool.session do |t|
         t.exec("SET statement_timeout = #{Integer(@default * 1000)}")
-        t.exec(sql, *args).tap { t.exec('RESET statement_timeout') }
+        begin
+          t.exec(sql, *args)
+        ensure
+          t.exec('RESET statement_timeout')
+        end
       end
     end
     start = Time.now
