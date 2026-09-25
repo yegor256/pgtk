@@ -68,6 +68,7 @@ class Pgtk::Pool
   #   a connection on checkout, or +nil+ to disable validation
   # @param [Object] log The log
   def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
+    raise(ArgumentError, 'Timeout must be non-negative') if timeout.negative?
     @wire = wire
     unless max.is_a?(Integer) && max.positive?
       raise(ArgumentError, "The max size of the pool must be a positive integer, while #{max.inspect} provided")
