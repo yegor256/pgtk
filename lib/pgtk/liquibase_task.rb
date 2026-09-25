@@ -140,18 +140,16 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   end
 
   def pgdump(yml, host, password)
-    qbash(
+    args = [
       'pg_dump',
-      '-h', Shellwords.escape(host),
       '-p', Shellwords.escape(yml.dig('pgsql', 'port').to_s),
       '-U', Shellwords.escape(yml.dig('pgsql', 'user')),
       '-d', Shellwords.escape(yml.dig('pgsql', 'dbname')),
       '-n', 'public',
-      '--schema-only',
-      env: { 'PGPASSWORD' => password },
-      stdout: @quiet ? Loog::NULL : Loog::REGULAR,
-      stderr: Loog::REGULAR
-    )
+      '--schema-only'
+    ]
+    args.insert(1, '-h', Shellwords.escape(host)) unless host.nil?
+    qbash(args, env: { 'PGPASSWORD' => password }, stdout: @quiet ? Loog::NULL : Loog::REGULAR, stderr: Loog::REGULAR)
   end
 
   def dockerdump(yml, host, password)
