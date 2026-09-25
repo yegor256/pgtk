@@ -41,7 +41,11 @@ class Pgtk::LiquicheckTask < Rake::TaskLib
   end
 
   def inspect(errors, file)
-    doc = Nokogiri::XML(File.open(file))
+    doc = Nokogiri::XML(File.read(file))
+    unless doc.errors.empty?
+      (errors[file] ||= []).concat(doc.errors.map { |e| "XML is broken: #{e.message.strip}" })
+      return
+    end
     doc.remove_namespaces!
     path = doc.at_xpath('databaseChangeLog')&.attr('logicalFilePath')&.to_s
     on(errors, file) do
