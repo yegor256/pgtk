@@ -46,14 +46,12 @@ Pgtk::PgsqlTask.new :pgsql do |t|
   # Temp directory with PostgreSQL files:
   t.dir = 'target/pgsql'
   # To delete the directory on every start;
-  t.fresh_start = true
+  t.fresh = true
   t.user = 'test'
   t.password = 'test'
   t.dbname = 'test'
   # YAML file to be created with connection details:
   t.yaml = 'target/pgsql-config.yml'
-  # List of contexts or empty if all:
-  t.contexts = '!test'
   # List of PostgreSQL configuration options:
   t.config = {
     log_min_messages: 'ERROR',
@@ -76,10 +74,12 @@ Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   t.yaml = ['target/pgsql-config.yml', 'config.yml']
   # Reduce the amount of log messages (TRUE by default):
   t.quiet = false
+  # List of contexts or empty if all:
+  t.contexts = '!test'
   # Overwriting default version of PostgreSQL server:
-  t.postgresql_version = '42.7.0'
+  t.postgresql = '42.7.0'
   # Overwriting default version of Liquibase:
-  t.liquibase_version = '3.2.2'
+  t.liquibase = '3.2.2'
 end
 ```
 

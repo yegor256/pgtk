@@ -99,4 +99,17 @@ class TestLiquibaseTask < Pgtk::Test
       assert_match('CREATE TABLE public.book', File.read(schema))
     end
   end
+
+  def test_readme_configures_a_task_that_exists
+    snippet = File.read(File.join(__dir__, '../README.md'))[/```ruby[^`]*Pgtk::LiquibaseTask[^`]*```/m]
+    refute_nil(snippet, 'the README must show how to configure the task')
+    setters = snippet.scan(/^\s*t\.([a-z_]+)\s*=/)
+    refute_empty(setters, snippet)
+    setters.each do |(setter)|
+      assert(
+        Pgtk::LiquibaseTask.public_method_defined?(:"#{setter}="),
+        "the README sets t.#{setter}, which Pgtk::LiquibaseTask does not accept"
+      )
+    end
+  end
 end
