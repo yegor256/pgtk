@@ -322,7 +322,7 @@ class Pgtk::Pool
       parts << "running: #{running.gsub(/\s+/, ' ').strip.ellipsized(60)}" if running
     end
     parts.join(' ')
-  rescue PG::ConnectionBad => e
+  rescue StandardError => e
     pid = conn.instance_variable_get(:@pgtk_pid)
     parts = ['    ']
     parts << (pid ? "##{pid}" : '#?')
