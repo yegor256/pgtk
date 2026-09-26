@@ -94,6 +94,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
   end
 
   def save(port)
+    FileUtils.mkdir_p(File.dirname(@yaml))
     File.write(
       @yaml,
       {
