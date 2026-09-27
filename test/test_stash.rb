@@ -944,6 +944,20 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_does_not_expose_cached_rows
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      [{ 'id' => '1' }]
+    end
+    stash = Pgtk::Stash.new(pool)
+    first = stash.exec('SELECT * FROM users')
+    assert_raises(FrozenError, 'a cached row must not be editable by one caller') { first[0]['id'] = 'changed' }
+    assert_equal('1', stash.exec('SELECT * FROM users')[0]['id'], 'the next caller must see what the database returned')
+    assert_equal(1, calls, 'the second read must still come from the cache')
+  end
+
   private
 
   def hammer(stash, count, writers, readers, seconds)
