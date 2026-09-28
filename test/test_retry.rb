@@ -307,4 +307,56 @@ class TestRetry < Pgtk::Test
       )
     end
   end
+
+  def test_retries_delete_on_busy_pool
+    fake_pool do |pool|
+      counter = 0
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |sql, *args|
+        counter += 1
+        raise(Pgtk::Pool::Busy, 'No free connection appeared in the pool after 5s of waiting') if counter < 3
+        pool.exec(sql, *args)
+      end
+      Pgtk::Retry.new(stub, attempts: 3).exec('DELETE FROM book WHERE id = $1', [1])
+      assert_equal(
+        3, counter,
+        'DELETE must be retried on Pgtk::Pool::Busy: no connection was taken, thus the query never reached the server'
+      )
+    end
+  end
+
+  def test_fails_after_max_busy_attempts
+    fake_pool do |_pool|
+      stub = Object.new
+      def stub.version
+        'stub'
+      end
+      stub.define_singleton_method(:exec) do |_sql, *_args|
+        raise(Pgtk::Pool::Busy, 'No free connection appeared in the pool after 5s of waiting')
+      end
+      assert_kind_of(
+        Pgtk::Pool::Busy,
+        assert_raises(Pgtk::Retry::Exhausted) do
+          Pgtk::Retry.new(stub, attempts: 2).exec('UPDATE book SET title = $1 WHERE id = $2', ['X', 1])
+        end.cause,
+        'Busy must be preserved as cause when attempts run out'
+      )
+    end
+  end
+
+  def test_does_not_retry_a_broken_select
+    counter = 0
+    stub = Object.new
+    stub.define_singleton_method(:exec) do |_sql, *_args|
+      counter += 1
+      raise(PG::UndefinedTable, 'relation "missing_table" does not exist')
+    end
+    assert_raises(PG::UndefinedTable) do
+      Pgtk::Retry.new(stub, attempts: 3).exec('SELECT * FROM missing_table')
+    end
+    assert_equal(1, counter, 'a missing table is not going to appear on the second attempt')
+  end
 end

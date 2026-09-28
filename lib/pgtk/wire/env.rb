@@ -29,13 +29,21 @@ class Pgtk::Wire::Env
   def initialize(var = 'DATABASE_URL', **opts)
     raise(ArgumentError, "The name of the environment variable can't be nil") if var.nil?
     @value = ENV.fetch(var, nil)
-    raise(ArgumentError, "The environment variable #{@value.inspect} is not set") if @value.nil?
+    raise(ArgumentError, "The environment variable #{var.inspect} is not set") if @value.nil?
     @opts = opts
   end
 
   # Create a new connection to PostgreSQL server.
+  #
+  # The credentials may be omitted from the URL, as in
+  # +postgres://localhost/db+. In that case +nil+ is passed to libpq, which
+  # then takes the user name and the password from its own environment.
   def connection
     uri = URI(@value)
+    raise(ArgumentError, "The host is absent in #{@value.inspect}") if uri.host.nil? || uri.host.empty?
+    dbname = uri.path.to_s[1..]
+    raise(ArgumentError, "The database name is absent in #{@value.inspect}") if dbname.nil? || dbname.empty?
+    user, password = uri.userinfo.to_s.split(':', 2)
     Pgtk::Wire::Direct.new(
       host: URI.decode_uri_component(uri.host),
       port: uri.port || 5432,

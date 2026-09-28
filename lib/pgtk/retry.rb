@@ -5,6 +5,7 @@
 
 require_relative '../pgtk'
 require_relative 'impatient'
+require_relative 'pool/busy'
 
 # Retry is a decorator for Pool that automatically retries failed SELECT queries.
 # It provides fault tolerance for transient database errors by retrying read-only
@@ -51,6 +52,13 @@ require_relative 'impatient'
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
 
+  DETERMINISTIC = [
+    PG::SyntaxErrorOrAccessRuleViolation,
+    PG::DataException,
+    PG::IntegrityConstraintViolation,
+    PG::FeatureNotSupported
+  ].freeze
+
   # Constructor.
   #
   # @param [Pgtk::Pool] pool The pool to decorate
@@ -83,8 +91,15 @@ class Pgtk::Retry
   end
 
   # Execute a SQL query with automatic retry on transient failures.
-  # Only SELECT queries are retried, since reads are idempotent.
-  # Non-SELECT queries propagate the original error immediately, even
+  # Only SELECT queries are retried, since reads are idempotent, and only
+  # when the failure may be transient: an error from DETERMINISTIC, such as
+  # a malformed statement or a violated constraint, is raised as it is,
+  # with its own type, and the query is not sent again. The
+  # single exception is Pgtk::Pool::Busy, which is retried for every
+  # query type: it is raised while waiting for a free connection, thus
+  # the statement provably never reached the server and a second
+  # attempt cannot duplicate a write.
+  # Other non-SELECT queries propagate the original error immediately, even
   # on PG::ConnectionBad, because that error can be raised after the
   # server already received the query but before the acknowledgement
   # reached the client, and retrying a non-idempotent write could
@@ -100,7 +115,12 @@ class Pgtk::Retry
     attempt = 0
     begin
       @pool.exec(sql, *)
+    rescue Pgtk::Pool::Busy => e
+      attempt += 1
+      raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
+      retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
+      raise(e) if DETERMINISTIC.any? { |k| e.is_a?(k) }
       raise(e) unless query.strip.upcase.start_with?('SELECT')
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts

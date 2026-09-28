@@ -57,13 +57,9 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def config
     yml = @yaml
     return yml if yml.is_a?(Hash)
-    YAML.load_file(
-      if @yaml.is_a?(Array)
-        @yaml.drop_while { |f| !File.exist?(f) }.first
-      else
-        @yaml
-      end
-    )
+    file = @yaml.is_a?(Array) ? @yaml.find { |candidate| File.exist?(candidate) } : @yaml
+    raise(ArgumentError, "None of the YAML files exists: #{@yaml.inspect}") unless file && File.exist?(file)
+    YAML.load_file(file)
   end
 
   def validate(yml)
@@ -140,18 +136,16 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   end
 
   def pgdump(yml, host, password)
-    qbash(
+    args = [
       'pg_dump',
-      '-h', Shellwords.escape(host),
       '-p', Shellwords.escape(yml.dig('pgsql', 'port').to_s),
       '-U', Shellwords.escape(yml.dig('pgsql', 'user')),
       '-d', Shellwords.escape(yml.dig('pgsql', 'dbname')),
       '-n', 'public',
-      '--schema-only',
-      env: { 'PGPASSWORD' => password },
-      stdout: @quiet ? Loog::NULL : Loog::REGULAR,
-      stderr: Loog::REGULAR
-    )
+      '--schema-only'
+    ]
+    args.insert(1, '-h', Shellwords.escape(host)) unless host.nil?
+    qbash(args, env: { 'PGPASSWORD' => password }, stdout: @quiet ? Loog::NULL : Loog::REGULAR, stderr: Loog::REGULAR)
   end
 
   def dockerdump(yml, host, password)
