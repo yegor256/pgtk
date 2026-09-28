@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
 require 'ellipsized'
+require 'loog'
 require 'pg'
 require 'tago'
 require_relative '../pgtk'
@@ -68,11 +68,19 @@ class Pgtk::Pool
   #   a connection on checkout, or +nil+ to disable validation
   # @param [Object] log The log
   def initialize(wire, max: 8, timeout: 1, idle: 60, log: Loog::NULL)
+    raise(ArgumentError, 'Timeout must be non-negative') if timeout.negative?
     @wire = wire
+    unless max.is_a?(Integer) && max.positive?
+      raise(ArgumentError, "The max size of the pool must be a positive integer, while #{max.inspect} provided")
+    end
     @max = max
+    unless timeout.is_a?(Numeric) && timeout.positive?
+      raise(ArgumentError, "The timeout must be a positive number of seconds, while #{timeout.inspect} provided")
+    end
     @idle = idle
     @log = log
     @pool = IterableQueue.new(max, timeout)
+    @lock = Mutex.new
     @started = false
   end
 
@@ -80,7 +88,12 @@ class Pgtk::Pool
   #
   # @return [String] Version of PostgreSQL server
   def version
-    @version ||= exec('SHOW server_version')[0]['server_version'].split[0]
+    @version ||=
+      begin
+        conn = @pool.pop
+        @pool.push(conn)
+        conn.parameter_status('server_version').split[0]
+      end
   end
 
   # Get as much details about it as possible.
@@ -103,20 +116,22 @@ class Pgtk::Pool
   # open at the same time. For example, Heroku free PostgreSQL database
   # allows only one connection open.
   def start!
-    return if @started
-    @max.times do
-      @pool.push(@wire.connection)
+    @lock.synchronize do
+      return if @started
+      @max.times do
+        @pool.push(@wire.connection)
+      end
+      (2 * @max).times do
+        connect { |c| c.exec('SELECT 1') }
+      rescue StandardError => e
+        @log.warn("Pool warm-up query failed, slot will be retried: #{e.message.strip}")
+      end
+      @max.times do
+        connect { |c| c.exec('SELECT 1') }
+      end
+      @started = true
+      @log.debug("PostgreSQL pool started with #{@max} connections")
     end
-    (2 * @max).times do
-      connect { |c| c.exec('SELECT 1') }
-    rescue StandardError => e
-      @log.warn("Pool warm-up query failed, slot will be retried: #{e.message.strip}")
-    end
-    @max.times do
-      connect { |c| c.exec('SELECT 1') }
-    end
-    @started = true
-    @log.debug("PostgreSQL pool started with #{@max} connections")
   end
 
   # Make a query and return the result as an array of hashes. For example,
@@ -206,6 +221,29 @@ class Pgtk::Pool
     end
   end
 
+  # Grab a single connection from the pool and yield an executor bound to it,
+  # WITHOUT starting a transaction. Unlike +transaction+, no +START TRANSACTION+
+  # is issued, which makes this suitable for statements that PostgreSQL refuses
+  # to run inside a transaction block, such as +VACUUM+, +REINDEX+, or
+  # +CREATE INDEX CONCURRENTLY+. All statements executed through the yielded
+  # object run on the same connection, so a session-level setting (for example
+  # +SET statement_timeout+) made earlier in the block stays in effect for the
+  # statements that follow:
+  #
+  #  pgsql.session do |s|
+  #    s.exec('SET statement_timeout = 5000')
+  #    s.exec('VACUUM book')
+  #    s.exec('RESET statement_timeout')
+  #  end
+  #
+  # @yield [Object] Yields an executor that responds to +exec+
+  # @return [Object] Result of the block
+  def session
+    connect do |c|
+      yield(Txn.new(c, @log))
+    end
+  end
+
   private
 
   def connect
@@ -285,7 +323,7 @@ class Pgtk::Pool
       parts << "running: #{running.gsub(/\s+/, ' ').strip.ellipsized(60)}" if running
     end
     parts.join(' ')
-  rescue PG::ConnectionBad => e
+  rescue StandardError => e
     pid = conn.instance_variable_get(:@pgtk_pid)
     parts = ['    ']
     parts << (pid ? "##{pid}" : '#?')

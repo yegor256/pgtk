@@ -93,6 +93,27 @@ class TestLiquicheckTask < Pgtk::Test
     end
   end
 
+  def test_with_broken_xml
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, '001-some-migration.xml'), <<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <databaseChangeLog logicalFilePath="001-some-migration.xml">
+          <changeSet id="001" author="yegor256">
+      XML
+      Pgtk::LiquicheckTask.new(:liquicheck_broken) do |t|
+        t.dir = '.'
+        t.pattern = '*.xml'
+      end
+      assert_raises(SystemExit) do
+        assert_output(/XML is broken/) do
+          Dir.stub(:pwd, dir) do
+            Rake::Task['liquicheck_broken'].invoke
+          end
+        end
+      end
+    end
+  end
+
   private
 
   def populate(dir, specs)

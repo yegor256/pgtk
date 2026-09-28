@@ -81,6 +81,21 @@ class TestWire < Pgtk::Test
     end
   end
 
+  def test_yaml_forwards_extra_opts
+    fake_config do |f|
+      c = YAML.load_file(f)
+      c['pgsql']['application_name'] = "pgtk_#{SecureRandom.hex(4)}"
+      File.write(f, YAML.dump(c))
+      assert_equal(
+        c['pgsql']['application_name'],
+        Pgtk::Wire::Yaml.new(f).connection.exec(
+          "SELECT current_setting('application_name')"
+        )[0]['current_setting'],
+        'extra YAML keys must reach PG.connect'
+      )
+    end
+  end
+
   def test_explicit_kwargs_win_over_url_query
     fake_config do |f|
       c = YAML.load_file(f)['pgsql']
@@ -99,5 +114,61 @@ class TestWire < Pgtk::Test
         'explicit kwargs must override URL query options on conflict'
       )
     end
+  end
+
+  def test_omits_credentials_when_url_has_no_userinfo
+    ENV['DATABASE_URL_NO_USER'] = 'postgres://localhost:5432/testdb'
+    args = captured { Pgtk::Wire::Env.new('DATABASE_URL_NO_USER').connection }
+    assert_nil(args[:user], 'a URL without userinfo must pass no user to libpq')
+    assert_nil(args[:password], 'a URL without userinfo must pass no password to libpq')
+    assert_equal('testdb', args[:dbname], args.to_s)
+  end
+
+  def test_takes_a_user_without_a_password
+    ENV['DATABASE_URL_NO_PASSWORD'] = 'postgres://jeff@localhost:5432/testdb'
+    args = captured { Pgtk::Wire::Env.new('DATABASE_URL_NO_PASSWORD').connection }
+    assert_equal('jeff', args[:user], args.to_s)
+    assert_nil(args[:password], 'a URL without a password must pass no password to libpq')
+  end
+
+  def test_complains_when_the_database_name_is_absent
+    ENV['DATABASE_URL_NO_DBNAME'] = 'postgres://localhost:5432'
+    assert_includes(
+      assert_raises(ArgumentError) { Pgtk::Wire::Env.new('DATABASE_URL_NO_DBNAME').connection }.message,
+      'database name is absent',
+      'a URL without a database name must be reported, not crash in CGI.unescape'
+    )
+  end
+
+  def test_unbrackets_an_ipv_six_host
+    ENV['DATABASE_URL_IPV6'] = 'postgres://jeff:swordfish@[::1]:5432/testdb'
+    host = nil
+    Pgtk::Wire.stub_const(
+      :Direct,
+      Class.new do
+        define_method(:initialize) { |**opts| host = opts[:host] }
+        define_method(:connection) { host }
+      end
+    ) do
+      Pgtk::Wire::Env.new('DATABASE_URL_IPV6').connection
+    end
+    assert_equal('::1', host, 'libpq expects an IPv6 literal without the brackets the URL carries')
+  end
+
+  private
+
+  def captured(&)
+    args = {}
+    Pgtk::Wire.stub_const(
+      :Direct,
+      Class.new do
+        define_method(:initialize) do |**opts|
+          args.replace(opts)
+        end
+        define_method(:connection) { args }
+      end,
+      &
+    )
+    args
   end
 end

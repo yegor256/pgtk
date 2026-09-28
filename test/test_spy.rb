@@ -45,6 +45,15 @@ class TestSpy < Pgtk::Test
     end
   end
 
+  def test_duration
+    durations = []
+    fake_pool do |pool|
+      Pgtk::Spy.new(pool) { |_sql, d| durations << d }.exec('SELECT 1')
+    end
+    refute_empty(durations, 'callback must be called')
+    assert_operator(durations.first, :>, 0, "duration must be greater than 0, got: #{durations.first}")
+  end
+
   def test_start
     fake_pool do |pool|
       stash = Pgtk::Spy.new(pool)

@@ -33,9 +33,17 @@ class TestImpatient < Pgtk::Test
   end
 
   def test_interrupts
-    fake_pool do |pool|
+    fake_pool(options: '-c statement_timeout=10') do |pool|
       assert_raises(Pgtk::Impatient::TooSlow) do
         Pgtk::Impatient.new(pool, 0.01).exec(['SELECT COUNT(*)', 'FROM generate_series(1, 1000000) AS a'])
+      end
+    end
+  end
+
+  def test_interrupts_query_with_arguments
+    fake_pool(options: '-c statement_timeout=50') do |pool|
+      assert_raises(Pgtk::Impatient::TooSlow) do
+        Pgtk::Impatient.new(pool, 0.05).exec('SELECT pg_sleep($1)', [5])
       end
     end
   end
@@ -96,30 +104,78 @@ class TestImpatient < Pgtk::Test
     end
   end
 
-  def test_sets_server_side_timeout_per_query
+  def test_sends_query_alone
     fake_pool do |pool|
       captured = []
       Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5).exec('SELECT 1')
+      assert_equal(['SELECT 1'], captured, "must send no statement ahead of the query: #{captured.inspect}")
+    end
+  end
+
+  def test_excluded_still_timed_out
+    fake_pool do |pool|
+      captured = []
+      Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5, /^SELECT 1/).exec('SELECT 1')
       assert(
-        captured.any? { |s| s.match?(/SET LOCAL statement_timeout\s*=\s*\d+/) },
-        "must set statement_timeout per query, got: #{captured.inspect}"
+        captured.any? { |s| s.match?(/SET statement_timeout\s*=\s*300000\b/) },
+        "must set default 300s statement_timeout for excluded queries, got: #{captured.inspect}"
+      )
+      refute(
+        captured.any? { |s| s.include?('SET LOCAL') || s.include?('START TRANSACTION') },
+        "excluded queries must not run inside a transaction, got: #{captured.inspect}"
       )
     end
   end
 
-  def test_skips_timeout_for_excluded_queries
+  def test_excluded_custom_default
     fake_pool do |pool|
       captured = []
-      Pgtk::Impatient.new(Pgtk::Spy.new(pool) { |sql, _| captured << sql }, 1.5, /^SELECT 1/).exec('SELECT 1')
-      refute(
-        captured.any? { |s| s.include?('SET LOCAL statement_timeout') },
-        "must not set statement_timeout for excluded queries, got: #{captured.inspect}"
+      Pgtk::Impatient.new(
+        Pgtk::Spy.new(pool) do |sql, _|
+          captured << sql
+        end, 1.5, /^SELECT 1/, default: 10
+      ).exec('SELECT 1')
+      assert(
+        captured.any? { |s| s.match?(/SET statement_timeout\s*=\s*10000\b/) },
+        "must set custom default timeout, got: #{captured.inspect}"
       )
+    end
+  end
+
+  def test_excluded_zero_default
+    fake_pool do |pool|
+      captured = []
+      Pgtk::Impatient.new(
+        Pgtk::Spy.new(pool) do |sql, _|
+          captured << sql
+        end, 1.5, /^SELECT 1/, default: 0
+      ).exec('SELECT 1')
+      assert(
+        captured.any? { |s| s.match?(/SET statement_timeout\s*=\s*0\b/) },
+        "must lift the limit of the connection when default is 0, got: #{captured.inspect}"
+      )
+    end
+  end
+
+  def test_runs_excluded_query_outside_transaction
+    fake_pool do |pool|
+      Pgtk::Impatient.new(pool, 1, /^VACUUM/).exec('VACUUM book')
+    end
+  end
+
+  def test_resets_timeout_when_excluded_query_fails
+    fake_pool do |pool|
+      captured = []
+      spy = Pgtk::Spy.new(pool) { |sql, _| captured << sql }
+      assert_raises(PG::UndefinedColumn) do
+        Pgtk::Impatient.new(spy, 1, /^SELECT missing_column/, default: 7).exec('SELECT missing_column FROM book')
+      end
+      assert_equal(['SET statement_timeout = 7000', 'RESET statement_timeout'], captured)
     end
   end
 
   def test_does_not_leave_orphan_backend_after_timeout
-    fake_pool(2) do |pool|
+    fake_pool(2, options: '-c statement_timeout=300') do |pool|
       tag = SecureRandom.hex(8)
       sql = "SELECT pg_sleep(30) /* #{tag} */"
       assert_raises(Pgtk::Impatient::TooSlow) do
