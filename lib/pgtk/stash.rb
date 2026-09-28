@@ -6,6 +6,7 @@
 require 'concurrent-ruby'
 require 'joined'
 require 'loog'
+require 'objspace'
 require 'tago'
 require_relative '../pgtk'
 
@@ -14,6 +15,10 @@ require_relative '../pgtk'
 # Provides a caching layer for PostgreSQL queries, automatically invalidating
 # the cache when tables are modified. Read queries are cached while write
 # queries bypass the cache and invalidate related cached entries.
+#
+# Tables that are too write-heavy to benefit from caching can be listed
+# via the +volatile:+ constructor parameter; any read whose FROM/JOIN
+# set touches one of them bypasses the cache entirely.
 #
 # Thread-safe with read-write locking.
 #
@@ -29,19 +34,27 @@ require_relative '../pgtk'
 # Copyright:: Copyright (c) 2019-2026 Yegor Bugayenko
 # License:: MIT
 class Pgtk::Stash
-  MODS = %w[INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK REINDEX TRUNCATE CREATE ALTER DROP SET CALL].freeze
-  MODS_RE = Regexp.new("(^|\\s)(#{MODS.join('|')})(\\s|$)")
+  MODS = %w[
+    INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK
+    REINDEX TRUNCATE CREATE ALTER DROP SET START CALL REFRESH MERGE
+  ].freeze
+  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
+  WITH_RE = /\AWITH(\s|$)/
 
   IDENT = '[a-z_][a-z0-9_]*'
 
   ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
-  SEPARATOR = ' --%*@#~($-- '
+  NONDETERMINISTIC = /
+    \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
+    LOCALTIMESTAMP|LOCALTIME|RANDOM|GEN_RANDOM_UUID|
+    CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
+  /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :ALTS_RE, :READS_RE, :SEPARATOR
+  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
 
   # Initialize a new Stash with query caching.
   #
@@ -59,11 +72,13 @@ class Pgtk::Stash
   # @param [Float] retirement Interval in seconds between retirement tasks
   # @param [Loog] loog Logger instance
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
+  # @param [Array<String>] volatile Table names that must never be cached
   def initialize(
     pool,
     stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
+    volatile: [],
     refill: 16,
     delay: 0,
     maxqueue: 128,
@@ -76,9 +91,12 @@ class Pgtk::Stash
     @pool = pool
     @stash = stash
     @stash[:table_mod] ||= {}
-    @stash[:table_inflight] ||= {}
+    unless @stash[:table_inflight].default_proc
+      @stash[:table_inflight] = Hash.new { |h, k| h[k] = Concurrent::AtomicFixnum.new(0) }
+    end
     @loog = loog
     @entrance = entrance
+    @volatile = Array(volatile).map(&:to_s).freeze
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
@@ -121,8 +139,10 @@ class Pgtk::Stash
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if MODS_RE.match?(pure) || /(^|\s)pg_[a-z_]+\(/.match?(pure)
+    if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
+    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
+      @pool.exec(pure, params, result)
     else
       select(pure, params, result)
     end
@@ -134,7 +154,17 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance))
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
+    end
+  end
+
+  # Run statements on a single connection, without a transaction.
+  #
+  # @yield [Pgtk::Stash] A stash bound to the connection
+  # @return [Object] The result of the block
+  def session
+    @pool.session do |t|
+      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
     end
   end
 
@@ -145,7 +175,7 @@ class Pgtk::Stash
       {
         q: q.dup,
         c: kk.values.count,
-        p: kk.values.sum { |vv| vv[:popularity] },
+        p: kk.values.sum { |vv| vv[:popularity]&.value || 0 },
         s: kk.values.count { |vv| vv[:stale] },
         u: kk.values.map { |vv| vv[:used] }.max || Time.now
       }
@@ -163,6 +193,7 @@ class Pgtk::Stash
         '  Not launched yet'
       end,
       "  #{cached} queries cached (#{cached > @cap ? 'above' : 'below'} the cap)",
+      "  ~#{footprint} bytes of RAM occupied by cache",
       "  #{@stash[:tables].count} tables in cache",
       "  #{list.sum { |a| a[:s] }} stale queries in cache:",
       stale(list),
@@ -222,49 +253,43 @@ class Pgtk::Stash
     tables = pure.scan(ALTS_RE).flatten
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
-    @entrance.with_write_lock do
-      affected.each { |t| @stash[:table_inflight][t] = (@stash[:table_inflight][t] || 0) + 1 }
-    end
+    affected.each { |t| @stash[:table_inflight][t].increment }
     begin
       @pool.exec(pure, params, result).tap do
         now = Time.now
         @entrance.with_write_lock do
           affected.each do |t|
-            @stash[:table_inflight][t] -= 1
-            old = @stash[:table_mod][t]
-            stamp = old && old > now ? old : now
-            @stash[:table_mod][t] = stamp
+            @stash[:table_inflight][t].decrement
+            @stash[:table_mod][t] = (@stash[:table_mod][t] || 0) + 1
             @stash[:tables][t]&.each do |q|
               @stash[:queries][q]&.each_key do |key|
-                @stash[:queries][q][key][:stale] = stamp
+                @stash[:queries][q][key][:stale] = now
               end
             end
           end
         end
       end
     rescue StandardError
-      @entrance.with_write_lock do
-        affected.each { |t| @stash[:table_inflight][t] -= 1 }
-      end
+      affected.each { |t| @stash[:table_inflight][t].decrement }
       raise
     end
   end
 
   def select(pure, params, result)
-    key = params.join(SEPARATOR)
+    key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, params, result, ret, tables, marks) unless pure.include?(' NOW() ')
+      cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
   end
 
-  def cache(pure, key, params, result, ret, tables, marks)
+  def cache(pure, key, result, ret, tables, marks)
     raise(ArgumentError, "No tables at #{pure.inspect}") if tables.empty?
     @entrance.with_write_lock do
       tables.each do |t|
@@ -274,7 +299,7 @@ class Pgtk::Stash
       @stash[:queries][pure] ||= {}
       existing = @stash[:queries][pure][key]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
-      entry = { ret:, params:, result:, used: Time.now }
+      entry = { ret:, params: key, result:, used: Time.now }
       entry[:stale] =
         if existing && existing[:stale]
           existing[:stale]
@@ -282,24 +307,73 @@ class Pgtk::Stash
           Time.now
         end
       entry.delete(:stale) if entry[:stale].nil?
+      entry[:popularity] = (existing && existing[:popularity]) || Concurrent::AtomicFixnum.new
       @stash[:queries][pure][key] = entry
     end
   end
 
-  def bump(pure, key)
-    @entrance.with_write_lock do
-      @stash[:queries][pure][key][:popularity] ||= 0
-      @stash[:queries][pure][key][:popularity] += 1
-      @stash[:queries][pure][key][:used] = Time.now
+  def immutable(value)
+    case value
+    when Array
+      value.map { |item| immutable(item) }.freeze
+    when Hash
+      value.to_h { |key, item| [immutable(key), immutable(item)] }.freeze
+    when String
+      value.dup.freeze
+    else
+      value
     end
+  end
+
+  # Bump popularity and last-used time of a cached entry.
+  #
+  # This runs without the exclusive write lock: popularity is a
+  # +Concurrent::AtomicFixnum+ and +used+ is a plain assignment of an
+  # immutable value, neither of which mutates the structure of the
+  # +@stash[:queries]+ tree. Keeping it off the writer lock means a
+  # read-only workload never serializes through the writer (see #414).
+  #
+  # @return [void]
+  def bump(pure, params)
+    entry = @stash.dig(:queries, pure, params)
+    return unless entry
+    (entry[:popularity] ||= Concurrent::AtomicFixnum.new).increment
+    entry[:used] = Time.now
   end
 
   # Calculate total number of cached query results.
   #
   # @return [Integer] Total count of cached query results
   def cached
-    @entrance.with_write_lock do
+    @entrance.with_read_lock do
       @stash[:queries].values.sum { |kk| kk.values.size }
+    end
+  end
+
+  # Estimate the total heap footprint, in bytes, of everything held in
+  # +@stash[:queries]+.
+  #
+  # The count of cached entries alone is misleading: a single query with many
+  # parameter combinations keeps a distinct +PG::Result+ per combination, and
+  # the +cap+ limits the number of entries, not their weight. This gauge sums
+  # +ObjectSpace.memsize_of+ over each cached entry and its +:ret+, +:params+,
+  # and key strings, so an operator can tell whether the cache is about to
+  # exhaust memory. +Marshal+ is not an option here since neither +PG::Result+
+  # nor +Concurrent::AtomicFixnum+ is marshallable.
+  #
+  # The result is approximate: +memsize_of+ is shallow, so nested contents
+  # (rows inside a +PG::Result+) are only partially accounted for. A rough
+  # order of magnitude is enough.
+  #
+  # @return [Integer] Approximate total bytes of RAM held by the cache
+  def footprint
+    @entrance.with_read_lock do
+      @stash[:queries].sum do |q, kk|
+        ObjectSpace.memsize_of(q) +
+          kk.sum do |params, entry|
+            [params, entry, entry[:ret], entry[:params]].sum { |o| ObjectSpace.memsize_of(o) }
+          end
+      end
     end
   end
 
@@ -352,6 +426,8 @@ class Pgtk::Stash
           end
         end
       end
+    rescue StandardError => e
+      @loog.warn("Stash capper crashed: #{e.class}: #{e.message}")
     end
   end
 
@@ -363,6 +439,16 @@ class Pgtk::Stash
           evict(q) if @stash[:queries][q].empty?
         end
       end
+    rescue StandardError => e
+      @loog.warn("Stash retiree crashed: #{e.class}: #{e.message}")
+    end
+  end
+
+  def refiller!
+    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
+      ranked.each { |q| replenish(q) }
+    rescue StandardError => e
+      @loog.warn("Stash refiller crashed: #{e.class}: #{e.message}")
     end
   end
 
@@ -372,17 +458,11 @@ class Pgtk::Stash
     @stash[:tables].delete_if { |_, list| list.empty? }
   end
 
-  def refiller!
-    Concurrent::TimerTask.execute(execution_interval: @refill, executor: @tpool) do
-      ranked.each { |q| replenish(q) }
-    end
-  end
-
   def ranked
     qq =
       @entrance.with_write_lock do
         @stash[:queries]
-          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity] }, v.values.any? { |vv| vv[:stale] }] }
+          .map { |k, v| [k, v.values.sum { |vv| vv[:popularity]&.value || 0 }, v.values.any? { |vv| vv[:stale] }] }
       end
     qq.select { _1[2] }.sort_by { -_1[1] }.map { _1[0] }
   end
@@ -410,7 +490,7 @@ class Pgtk::Stash
           next unless h
           next unless h[:stale] == mark
           next if pinned.any? { |t, m| @stash[:table_mod][t] != m }
-          next if tables.any? { |t| (@stash[:table_inflight][t] || 0).positive? }
+          next if tables.any? { |t| @stash[:table_inflight][t].value.positive? }
           h[:ret] = ret
           h.delete(:stale)
         end

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'loog'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'loog'
 require 'pg'
 require_relative '../pgtk'
 require_relative 'wire'
@@ -82,8 +82,10 @@ class Pgtk::Spy
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
   def exec(sql, *)
-    @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - Time.now)
-    @pool.exec(sql, *)
+    start = Time.now
+    @pool.exec(sql, *).tap do
+      @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - start)
+    end
   end
 
   # Run a transaction with spying on each SQL query.
@@ -92,6 +94,17 @@ class Pgtk::Spy
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
+      yield(Pgtk::Spy.new(t, &@block))
+    end
+  end
+
+  # Run statements on a single connection (no transaction) with spying on
+  # each SQL query.
+  #
+  # @yield [Pgtk::Spy] Yields a spy bound to one connection
+  # @return [Object] Result of the block
+  def session
+    @pool.session do |t|
       yield(Pgtk::Spy.new(t, &@block))
     end
   end

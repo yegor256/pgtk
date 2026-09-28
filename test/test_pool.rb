@@ -67,6 +67,21 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_passes_result_format_without_parameters
+    calls = []
+    conn = Object.new
+    conn.define_singleton_method(:exec) do |sql|
+      calls << [:exec, sql]
+      []
+    end
+    conn.define_singleton_method(:exec_params) do |sql, args, result|
+      calls << [:exec_params, sql, args, result]
+      []
+    end
+    Pgtk::Pool::Txn.new(conn, Loog::NULL).exec('SELECT 1', [], 1)
+    assert_equal([[:exec_params, 'SELECT 1', [], 1]], calls)
+  end
+
   def test_logs_pgsql_errors_to_logger
     buf = Loog::Buffer.new
     fake_pool(log: buf) do |pool|
@@ -124,6 +139,28 @@ class TestPool < Pgtk::Test
         INSERT INTO book (title) VALUES ('one');
         INSERT INTO book (title) VALUES ('two');
         "
+      )
+    end
+  end
+
+  def test_session_runs_without_transaction
+    fake_pool do |pool|
+      pool.session do |s|
+        s.exec('SET statement_timeout = 5000')
+        s.exec('VACUUM book')
+        s.exec('RESET statement_timeout')
+      end
+    end
+  end
+
+  def test_session_returns_block_result
+    fake_pool do |pool|
+      assert_predicate(
+        Integer(
+          pool.session do |s|
+            s.exec('INSERT INTO book (title) VALUES ($1) RETURNING id', ['1984']).first['id']
+          end, 10
+        ), :positive?
       )
     end
   end
@@ -305,6 +342,15 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_concurrent_start
+    fake_config do |f|
+      pool = Pgtk::Pool.new(Pgtk::Wire::Yaml.new(f), max: 4)
+      Array.new(3) { Thread.new { pool.start! } }.each(&:join)
+      pool.start!
+      assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'], 'pool must work after concurrent start')
+    end
+  end
+
   def test_no_double_login_on_renew_failure
     fake_pool(1) do |pool|
       pool.exec('SELECT 1')
@@ -323,6 +369,16 @@ class TestPool < Pgtk::Test
         nil
       end
       assert_equal(1, attempts, 'login must not be retried after proactive renew has already failed')
+    end
+  end
+
+  def test_recycles_dead_connection_on_next_checkout
+    fake_pool(1) do |pool|
+      pool.exec('SELECT 1')
+      queue = pool.instance_variable_get(:@pool)
+      queue.map { |c| c.close unless c.finished? }
+      pool.exec('SELECT 42 AS n')
+      assert_equal('42', pool.exec('SELECT 42 AS n')[0]['n'])
     end
   end
 
@@ -440,6 +496,34 @@ class TestPool < Pgtk::Test
     end
   end
 
+  def test_refuses_a_non_positive_max
+    [0, -1].each do |max|
+      assert_includes(
+        assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, max:) }.message,
+        'must be a positive integer',
+        "the pool of #{max} connections can never execute a query, it must not be built"
+      )
+    end
+  end
+
+  def test_refuses_a_non_positive_timeout
+    [0, -1].each do |timeout|
+      assert_includes(
+        assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, timeout:) }.message,
+        'must be a positive number',
+        "the timeout of #{timeout} makes every checkout busy at once, it must not be accepted"
+      )
+    end
+  end
+
+  def test_refuses_a_max_that_is_not_an_integer
+    assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, max: 'four') }
+  end
+
+  def test_refuses_a_timeout_that_is_not_a_number
+    assert_raises(ArgumentError) { Pgtk::Pool.new(Object.new, timeout: nil) }
+  end
+
   private
 
   def fake_pgsql(dir, id, port)
@@ -467,14 +551,6 @@ class TestPool < Pgtk::Test
       cycle += 1
       sleep(0.1)
       raise(IOError, "Can't connect after #{limit} attempts") if cycle > limit
-    end
-  end
-
-  def halt(dir)
-    if File.exist?(File.join(dir, 'pgsql', 'pid'))
-      qbash("pg_ctl -D #{Shellwords.escape(File.join(dir, 'pgsql'))} stop")
-    elsif File.exist?(File.join(dir, 'pgsql', 'docker-container'))
-      qbash("docker stop #{File.read(File.join(dir, 'pgsql', 'docker-container'))}")
     end
   end
 

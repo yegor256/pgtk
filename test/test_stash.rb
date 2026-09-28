@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 require 'threads'
+require 'timeout'
 require_relative '../lib/pgtk/pool'
 require_relative '../lib/pgtk/stash'
 require_relative 'test__helper'
@@ -75,15 +76,45 @@ class TestStash < Pgtk::Test
     end
   end
 
-  def test_call_is_executed_as_a_modification
-    pool = Object.new
-    calls = []
-    pool.define_singleton_method(:exec) do |sql, *_args|
-      calls << sql
-      []
+  def test_postgres_write_commands
+    stash = Pgtk::Stash.new(
+      Object.new.tap do |pool|
+        def pool.exec(*)
+          []
+        end
+      end
+    )
+    [
+      'CALL refresh_accounts()',
+      'REFRESH MATERIALIZED VIEW account_totals',
+      'MERGE INTO accounts USING account_updates ON accounts.id = account_updates.id'
+    ].each { |query| stash.exec(query) }
+  end
+
+  def test_select_with_keyword_in_string
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      stash.exec('CREATE TABLE tmp (id INT, title TEXT)')
+      stash.exec("INSERT INTO tmp VALUES (1, 'COMMIT or ROLLBACK')")
+      first = stash.exec("SELECT * FROM tmp WHERE title LIKE '%COMMIT%'")
+      second = stash.exec("SELECT * FROM tmp WHERE title LIKE '%COMMIT%'")
+      assert_equal(first.to_a, second.to_a)
+      assert_same(first, second, 'SELECT with COMMIT in string must be cached')
     end
-    Pgtk::Stash.new(pool).exec('CALL add_account()')
-    assert_equal(['CALL add_account()'], calls)
+  end
+
+  def test_pg_read_function_not_modify
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      pool.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      pool.exec('CREATE TABLE tmp (id INT)')
+      pool.exec('INSERT INTO tmp VALUES (1)')
+      result = stash.exec("SELECT pg_table_size('tmp')")
+      refute_nil(result)
+      stash.exec('INSERT INTO tmp VALUES (2)')
+      refute_same(result, stash.exec("SELECT pg_table_size('tmp')"), 'pg_*() result must not be cached')
+    end
   end
 
   def test_caching
@@ -105,6 +136,40 @@ class TestStash < Pgtk::Test
         stash.exec('INSERT INTO book (title) VALUES ($1)', ['New Book'])
         refute_same(first, stash.exec(query))
       end
+    end
+  end
+
+  def test_cte_write_invalidates_cache
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Old Title'])
+      query = 'SELECT title FROM book'
+      first = stash.exec(query)
+      assert_same(first, stash.exec(query), 'SELECT must be cached before the CTE write')
+      stash.exec(
+        [
+          'WITH doomed AS (SELECT id FROM book WHERE title = $1)',
+          'DELETE FROM book USING doomed WHERE book.id = doomed.id RETURNING book.title'
+        ].join(' '),
+        ['Old Title']
+      )
+      refute_same(
+        first, stash.exec(query),
+        'a data-modifying CTE (WITH ... DELETE) must invalidate a previously-cached SELECT on the same table'
+      )
+      assert_empty(stash.exec(query).to_a, 'the deleted row must be gone from the cached SELECT')
+    end
+  end
+
+  def test_cte_read_stays_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Readable'])
+      query = 'WITH recent AS (SELECT title FROM book) SELECT title FROM recent'
+      assert_same(
+        stash.exec(query), stash.exec(query),
+        'a read-only CTE (WITH ... SELECT) must still be cached as a read'
+      )
     end
   end
 
@@ -150,6 +215,16 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_tracks_table_after_only_keyword
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |_sql, *_args| [] }
+    stash = Pgtk::Stash.new(pool)
+    stash.exec('SELECT * FROM ONLY accounts')
+    tables = stash.instance_variable_get(:@stash)[:tables]
+    assert_includes(tables, 'accounts')
+    refute_includes(tables, 'ONLY')
+  end
+
   def test_caching_with_params
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
@@ -159,6 +234,21 @@ class TestStash < Pgtk::Test
       assert_equal(first.to_a, second.to_a)
       assert_same(first, second)
       refute_same(first, stash.exec(query, ['Different Title']))
+    end
+  end
+
+  def test_snapshots_mutable_params_for_cache_key
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      params = ['Elegant Objects']
+      query = 'SELECT * FROM book WHERE title = $1'
+      assert_same(
+        stash.exec(query, params),
+        params.tap do |values|
+          values[0] = 'Different Title'
+          values[0] = 'Elegant Objects'
+        end.then { stash.exec(query, params) }
+      )
     end
   end
 
@@ -258,6 +348,23 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_dump_reports_memory_footprint
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      empty = stash.dump[/~(\d+) bytes of RAM/, 1]
+      refute_nil(empty, 'the dump must report the cache RAM footprint')
+      10.times do |i|
+        stash.exec('SELECT id, title FROM book WHERE title = $1', ["My book #{i}"])
+      end
+      assert_operator(
+        Integer(stash.dump[/~(\d+) bytes of RAM/, 1]), :>, Integer(empty),
+        'caching results must grow the reported footprint'
+      )
+    end
+  end
+
   def test_cache_refills
     interval = 0.2
     fake_pool do |pool|
@@ -343,6 +450,39 @@ class TestStash < Pgtk::Test
         stash.instance_variable_get(:@stash)[:tables],
         'tables index must drop query strings retired from cache'
       )
+    end
+  end
+
+  def test_does_not_cache_current_timestamp
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT CURRENT_TIMESTAMP, title FROM book WHERE id = $1', [1])
+      refute_includes(
+        stash.dump, 'CURRENT_TIMESTAMP',
+        'CURRENT_TIMESTAMP is non-deterministic and must not be cached'
+      )
+    end
+  end
+
+  def test_does_not_cache_random
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT RANDOM(), title FROM book WHERE id = $1', [1])
+      refute_includes(stash.dump, 'RANDOM', 'RANDOM() is non-deterministic and must not be cached')
+    end
+  end
+
+  def test_does_not_cache_gen_random_uuid
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['My book'])
+      stash.exec('SELECT GEN_RANDOM_UUID(), title FROM book WHERE id = $1', [1])
+      refute_includes(stash.dump, 'GEN_RANDOM_UUID', 'GEN_RANDOM_UUID() is non-deterministic and must not be cached')
     end
   end
 
@@ -510,6 +650,37 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_two_writes_same_tick_marks_cache_stillborn
+    fake_pool do |real_pool|
+      triggered = false
+      stash = nil
+      frozen = Time.now
+      stash = Pgtk::Stash.new(
+        HookedPool.new(
+          real_pool,
+          lambda do |q|
+            next if triggered
+            next unless q.start_with?('SELECT title FROM book')
+            triggered = true
+            stash.exec('INSERT INTO book (title) VALUES ($1)', ['B'])
+          end
+        ),
+        refill: nil, capping: nil, retirement: nil
+      )
+      Time.stub(:now, frozen) do
+        stash.exec('INSERT INTO book (title) VALUES ($1)', ['A'])
+      end
+      Time.stub(:now, frozen) do
+        stash.exec('SELECT title FROM book')
+      end
+      assert_includes(
+        stash.exec('SELECT title FROM book').map { |r| r['title'] },
+        'B',
+        'must detect stillborn cache when two writes share the same clock tick'
+      )
+    end
+  end
+
   def test_replenish_survives_eviction
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil, delay: 0)
@@ -574,6 +745,54 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_cache_hit_does_not_block_on_reader
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      query = 'SELECT id, title FROM book WHERE id = $1'
+      stash.exec(query, [1])
+      Thread.new { stash.instance_variable_get(:@entrance).with_read_lock { sleep(3) } }
+      sleep(0.5)
+      assert_equal(
+        'Elegant Objects',
+        Timeout.timeout(2) { stash.exec(query, [1]) }.first['title'],
+        'a cache hit must not serialize through the writer while a reader holds the lock'
+      )
+    end
+  end
+
+  def test_cache_hit_bumps_popularity
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      query = 'SELECT id, title FROM book WHERE id = $1'
+      5.times { stash.exec(query, [1]) }
+      assert_equal(
+        5,
+        stash.instance_variable_get(:@stash)[:queries][query].values.first[:popularity].value,
+        'every cache hit must bump popularity'
+      )
+    end
+  end
+
+  def test_cached_count_does_not_block_on_reader
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+      stash.start!
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Elegant Objects'])
+      stash.exec('SELECT id, title FROM book WHERE id = $1', [1])
+      Thread.new { stash.instance_variable_get(:@entrance).with_read_lock { sleep(3) } }
+      sleep(0.5)
+      assert_includes(
+        Timeout.timeout(2) { stash.dump },
+        'queries cached',
+        'counting cached entries must take the read lock, not the writer'
+      )
+    end
+  end
+
   def test_select_does_not_clear_stale_marker
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
@@ -608,6 +827,120 @@ class TestStash < Pgtk::Test
         stash.exec('SELECT ip FROM node WHERE id = $1', [42]).first,
         'cannot serve cached node row after parent org was cascade-deleted'
       )
+    end
+  end
+
+  def test_inflight_under_concurrent_modifies
+    fake_pool(4) do |pool|
+      stash = Pgtk::Stash.new(pool)
+      stash.start!
+      Array.new(4) do
+        Thread.new do
+          10.times do
+            stash.exec('UPDATE book SET title = $2 WHERE title = $1', [SecureRandom.hex(4), SecureRandom.hex(4)])
+          end
+        end
+      end.each(&:join)
+      assert_equal(
+        0, stash.instance_variable_get(:@stash)[:table_inflight]['book']&.value,
+        'inflight must be 0 after concurrent modifies'
+      )
+    end
+  end
+
+  def test_volatile_table_is_never_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Volatile'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Volatile']).then do |first|
+        refute_same(first, stash.exec(query, ['Volatile']), 'a volatile table must never be cached')
+      end
+    end
+  end
+
+  def test_non_volatile_table_still_cached
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['invocation'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Cacheable'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Cacheable']).then do |first|
+        assert_same(first, stash.exec(query, ['Cacheable']), 'a non-volatile table must still be cached')
+      end
+    end
+  end
+
+  def test_volatile_ignores_name_in_string_literal
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('DROP TABLE IF EXISTS tmp CASCADE')
+      stash.exec('CREATE TABLE tmp (id INT, title TEXT)')
+      stash.exec("INSERT INTO tmp VALUES (1, 'from book')")
+      query = "SELECT title FROM tmp WHERE title LIKE '%book%'"
+      stash.exec(query).then do |first|
+        assert_same(first, stash.exec(query), 'the volatile name inside a string literal must not disable caching')
+      end
+    end
+  end
+
+  def test_volatile_propagates_into_transaction
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Tx'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.transaction do |tx|
+        tx.exec(query, ['Tx']).then do |first|
+          refute_same(first, tx.exec(query, ['Tx']), 'volatile bypass must hold inside a transaction')
+        end
+        true
+      end
+    end
+  end
+
+  def test_volatile_propagates_into_session
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: ['book'])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Sess'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.session do |s|
+        s.exec(query, ['Sess']).then do |first|
+          refute_same(first, s.exec(query, ['Sess']), 'volatile bypass must hold inside a session')
+        end
+        true
+      end
+    end
+  end
+
+  def test_volatile_accepts_symbol_names
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: [:book])
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Sym'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Sym']).then do |first|
+        refute_same(first, stash.exec(query, ['Sym']), 'a symbol volatile name must be coerced and honoured')
+      end
+    end
+  end
+
+  def test_volatile_defaults_to_empty_and_caches
+    fake_pool do |pool|
+      stash = Pgtk::Stash.new(pool, volatile: nil)
+      stash.exec('INSERT INTO book (title) VALUES ($1)', ['Nil'])
+      query = 'SELECT title FROM book WHERE title = $1'
+      stash.exec(query, ['Nil']).then do |first|
+        assert_same(first, stash.exec(query, ['Nil']), 'nil volatile must behave like an empty list')
+      end
+    end
+  end
+
+  def test_readme_passes_only_known_keywords
+    allowed = Pgtk::Stash.instance_method(:initialize).parameters.filter_map { |type, name| name if type == :key }
+    snippets = File.read(File.join(__dir__, '../README.md')).scan(/```ruby[^`]*Pgtk::Stash\.new\([^`]*```/m)
+    refute_empty(snippets, 'the README must show how to configure the stash')
+    snippets.each do |snippet|
+      snippet.scan(/^\s+([a-z_]+):/) do |(kw)|
+        assert_includes(allowed, kw.to_sym, "the README passes #{kw}: which Pgtk::Stash does not accept")
+      end
     end
   end
 

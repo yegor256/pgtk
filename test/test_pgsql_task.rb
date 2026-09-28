@@ -80,4 +80,17 @@ class TestPgsqlTask < Pgtk::Test
       )
     end
   end
+
+  def test_readme_configures_a_task_that_exists
+    snippet = File.read(File.join(__dir__, '../README.md'))[/```ruby[^`]*Pgtk::PgsqlTask[^`]*```/m]
+    refute_nil(snippet, 'the README must show how to configure the task')
+    setters = snippet.scan(/^\s*t\.([a-z_]+)\s*=/)
+    refute_empty(setters, snippet)
+    setters.each do |(setter)|
+      assert(
+        Pgtk::PgsqlTask.public_method_defined?(:"#{setter}="),
+        "the README sets t.#{setter}, which Pgtk::PgsqlTask does not accept"
+      )
+    end
+  end
 end
