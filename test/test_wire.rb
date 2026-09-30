@@ -26,7 +26,8 @@ class TestWire < Pgtk::Test
       v = 'DATABASE_URL'
       ENV[v] = [
         "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
-        "@#{URI.encode_uri_component(c['host'])}:#{URI.encode_uri_component(c['port'].to_s)}/#{URI.encode_uri_component(c['dbname'])}"
+        "@#{URI.encode_uri_component(c['host'])}:#{URI.encode_uri_component(c['port'].to_s)}",
+        "/#{URI.encode_uri_component(c['dbname'])}"
       ].join
       c = Pgtk::Wire::Env.new(v).connection
       refute_nil(c)
@@ -37,7 +38,10 @@ class TestWire < Pgtk::Test
     fake_config do |f|
       c = YAML.load_file(f)['pgsql']
       v = 'DATABASE_URL_NO_PORT'
-      ENV[v] = "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}@localhost/#{URI.encode_uri_component(c['dbname'])}"
+      ENV[v] = [
+        "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
+        "@localhost/#{URI.encode_uri_component(c['dbname'])}"
+      ].join
       wire = Pgtk::Wire::Env.new(v)
       assert_includes(
         assert_raises(PG::ConnectionBad, 'must attempt connection to default port') do
