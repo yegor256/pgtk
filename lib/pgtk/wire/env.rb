@@ -45,7 +45,7 @@ class Pgtk::Wire::Env
     raise(ArgumentError, "The database name is absent in #{@value.inspect}") if dbname.nil? || dbname.empty?
     user, password = uri.userinfo.to_s.split(':', 2)
     Pgtk::Wire::Direct.new(
-      host: URI.decode_uri_component(uri.host),
+      host: URI.decode_uri_component(uri.hostname),
       port: uri.port || 5432,
       dbname: URI.decode_uri_component(uri.path.delete_prefix('/')),
       user: uri.user && URI.decode_uri_component(uri.user),
