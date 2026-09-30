@@ -52,7 +52,7 @@ class Pgtk::Stash
     (.+?)
     (?=\b(?:WHERE|GROUP|ORDER|LIMIT|OFFSET|HAVING|UNION|RETURNING|ON|JOIN)\b|;|\z)
   /imx
-  TABLE_RE = /(?:\A|,)\s*(?:ONLY\s+)?(#{IDENT})/i
+  TABLE_RE = /(?:\A|,)\s*(?:ONLY\s+)?(#{IDENT})(?![a-z0-9_]|\s*\()/i
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
