@@ -47,7 +47,7 @@ class Pgtk::Stash
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s+(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
