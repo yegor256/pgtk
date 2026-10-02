@@ -278,7 +278,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
-    key = immutable(params)
+    key = [result, immutable(params)].freeze
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
       tables = pure.scan(READS_RE).flatten
@@ -301,7 +301,7 @@ class Pgtk::Stash
       @stash[:queries][pure] ||= {}
       existing = @stash[:queries][pure][key]
       stillborn = tables.any? { |t| (cur = @stash[:table_mod][t]) && cur != marks[t] }
-      entry = { ret:, params: key, result:, used: Time.now }
+      entry = { ret:, params: key.last, result:, used: Time.now }
       entry[:stale] =
         if existing && existing[:stale]
           existing[:stale]
