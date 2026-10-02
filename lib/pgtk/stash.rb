@@ -285,7 +285,10 @@ class Pgtk::Stash
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
+      unless pure.match?(NONDETERMINISTIC)
+        ret = immutable(ret)
+        cache(pure, key, result, ret, tables, marks)
+      end
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
@@ -493,7 +496,7 @@ class Pgtk::Stash
           next unless h[:stale] == mark
           next if pinned.any? { |t, m| @stash[:table_mod][t] != m }
           next if tables.any? { |t| @stash[:table_inflight][t].value.positive? }
-          h[:ret] = ret
+          h[:ret] = immutable(ret)
           h.delete(:stale)
         end
       end
