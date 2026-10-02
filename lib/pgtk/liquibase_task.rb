@@ -57,8 +57,13 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def config
     yml = @yaml
     return yml if yml.is_a?(Hash)
-    file = @yaml.is_a?(Array) ? @yaml.find { |candidate| File.exist?(candidate) } : @yaml
-    raise(ArgumentError, "None of the YAML files exists: #{@yaml.inspect}") unless file && File.exist?(file)
+    file =
+      if @yaml.is_a?(Array)
+        @yaml.find { |candidate| File.exist?(candidate) }
+      else
+        @yaml
+      end
+    raise(ArgumentError, "No YAML configuration file found among #{Array(@yaml).join(', ')}") if file.nil?
     YAML.load_file(file)
   end
 
