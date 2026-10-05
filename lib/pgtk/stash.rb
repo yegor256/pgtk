@@ -43,22 +43,26 @@ class Pgtk::Stash
 
   IDENT = '[a-z_][a-z0-9_]*'
 
-  ALTS = ['UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE', 'DROP TABLE'].freeze
+  ALTS = [
+    'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
+    'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
+  ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   DROP_RE = /
     (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
   /ix
+  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
     LOCALTIMESTAMP|LOCALTIME|RANDOM|GEN_RANDOM_UUID|
-    CLOCK_TIMESTAMP)(?:\s*\(|(?=[^a-z0-9_]|$))
+    CLOCK_TIMESTAMP|NEXTVAL|CURRVAL|SETVAL)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :DROP_RE
+  private_constant :DROP_RE, :SELECT_INTO_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -77,12 +81,14 @@ class Pgtk::Stash
   # @param [Loog] loog Logger instance
   # @param [Concurrent::ReentrantReadWriteLock] entrance Read-write lock for thread-safe access
   # @param [Array<String>] volatile Table names that must never be cached
+  # @param [Boolean] cache Whether to cache reads in this stash
   def initialize(
     pool,
     stash: { queries: {}, tables: {}, table_mod: {}, table_inflight: {} },
     loog: Loog::NULL,
     entrance: Concurrent::ReentrantReadWriteLock.new,
     volatile: [],
+    cache: true,
     refill: 16,
     delay: 0,
     maxqueue: 128,
@@ -101,6 +107,7 @@ class Pgtk::Stash
     @loog = loog
     @entrance = entrance
     @volatile = Array(volatile).map(&:to_s).freeze
+    @cache = cache
     @refill = refill
     @delay = delay
     @maxqueue = maxqueue
@@ -143,7 +150,7 @@ class Pgtk::Stash
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0)
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
-    if MODS_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
+    if MODS_RE.match?(pure) || SELECT_INTO_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
     elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
       @pool.exec(pure, params, result)
@@ -158,8 +165,10 @@ class Pgtk::Stash
   # @return [Object] The result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile))
-    end
+      yield(
+        Pgtk::Stash.new(t, stash: @stash, loog: @loog, entrance: @entrance, volatile: @volatile, cache: false)
+      )
+    end.tap { invalidate! }
   end
 
   # Run statements on a single connection, without a transaction.
@@ -254,7 +263,7 @@ class Pgtk::Stash
   end
 
   def modify(pure, params, result)
-    tables = pure.scan(ALTS_RE).flatten
+    tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
     dropped = pure.match(DROP_RE)
     tables.concat(dropped[1].scan(/[a-z_][a-z0-9_]*/o)) if dropped
     tables.uniq!
@@ -282,6 +291,7 @@ class Pgtk::Stash
   end
 
   def select(pure, params, result)
+    return @pool.exec(pure, params, result) unless @cache
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
@@ -293,6 +303,15 @@ class Pgtk::Stash
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
+  end
+
+  def invalidate!
+    now = Time.now
+    @entrance.with_write_lock do
+      @stash[:queries].each_value do |entries|
+        entries.each_value { |entry| entry[:stale] = now }
+      end
+    end
   end
 
   def cache(pure, key, result, ret, tables, marks)

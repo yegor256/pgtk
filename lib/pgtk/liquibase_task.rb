@@ -57,8 +57,13 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
   def config
     yml = @yaml
     return yml if yml.is_a?(Hash)
-    file = @yaml.is_a?(Array) ? @yaml.find { |candidate| File.exist?(candidate) } : @yaml
-    raise(ArgumentError, "None of the YAML files exists: #{@yaml.inspect}") unless file && File.exist?(file)
+    file =
+      if @yaml.is_a?(Array)
+        @yaml.find { |candidate| File.exist?(candidate) }
+      else
+        @yaml
+      end
+    raise(ArgumentError, "No YAML configuration file found among #{Array(@yaml).join(', ')}") if file.nil?
     YAML.load_file(file)
   end
 
@@ -75,6 +80,11 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     raise(ArgumentError, "The 'url' is not set in the config (YAML)") if yml['pgsql']['url'].nil?
     raise(ArgumentError, "The 'user' is not set in the config (YAML)") if yml['pgsql']['user'].nil?
     raise(ArgumentError, "The 'password' is not set in the config (YAML)") if yml['pgsql']['password'].nil?
+    return if @schema.nil?
+    %w[host port dbname].each do |key|
+      next unless yml['pgsql'][key].nil?
+      raise(ArgumentError, "The '#{key}' is not set in the config (YAML), but pg_dump needs it for the schema")
+    end
   end
 
   def migrate(yml)
