@@ -52,8 +52,9 @@ require_relative 'pool/busy'
 class Pgtk::Retry
   BACKOFFS = [0.05, 0.2, 1.0].freeze
   READ_ONLY = /\A(?:SELECT\b.*|WITH\b(?:(?!\b(?:INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b).)*\bSELECT\b.*)\z/im
+  LEADING_COMMENTS = %r{\A(?:(?:\s+)|(?:--[^\n]*(?:\n|\z))|(?:/\*.*?\*/))*}m
 
-  private_constant :READ_ONLY
+  private_constant :READ_ONLY, :LEADING_COMMENTS
 
   DETERMINISTIC = [
     PG::SyntaxErrorOrAccessRuleViolation,
@@ -124,7 +125,7 @@ class Pgtk::Retry
       retry
     rescue StandardError, Pgtk::Impatient::TooSlow => e
       raise(e) if DETERMINISTIC.any? { |k| e.is_a?(k) }
-      raise(e) unless READ_ONLY.match?(query.strip)
+      raise(e) unless READ_ONLY.match?(query.sub(LEADING_COMMENTS, '').strip)
       attempt += 1
       raise(Exhausted, "Retry gave up after #{@attempts} attempts: #{e.message}") if attempt >= @attempts
       sleep(BACKOFFS[attempt - 1] || BACKOFFS.last) if e.is_a?(PG::ConnectionBad)
