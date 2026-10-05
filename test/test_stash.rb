@@ -91,6 +91,19 @@ class TestStash < Pgtk::Test
     ].each { |query| stash.exec(query) }
   end
 
+  def test_does_not_cache_sequence_functions
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    stash.exec("SELECT nextval('events_id_seq')")
+    stash.exec("SELECT nextval('events_id_seq')")
+    assert_equal(2, calls, 'sequence functions must not be served from the read cache')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
@@ -115,6 +128,25 @@ class TestStash < Pgtk::Test
       stash.exec('INSERT INTO tmp VALUES (2)')
       refute_same(result, stash.exec("SELECT pg_table_size('tmp')"), 'pg_*() result must not be cached')
     end
+  end
+
+  def test_write_statements_invalidate_target
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM account_totals'
+    stash.exec(query)
+    [
+      'REFRESH MATERIALIZED VIEW account_totals',
+      'MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE'
+    ].each { |statement| stash.exec(statement).tap { stash.exec(query) } }
+    assert_equal(
+      [
+        query, 'REFRESH MATERIALIZED VIEW account_totals', query,
+        'MERGE INTO account_totals USING updates ON true WHEN MATCHED THEN DELETE', query
+      ], calls
+    )
   end
 
   def test_caching
@@ -260,6 +292,22 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_invalidates_table_created_by_select_into
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT value FROM temporary_snapshot'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('SELECT 1 AS value INTO temporary_snapshot')
+    stash.exec(query)
+    assert_equal([query, 'SELECT 1 AS value INTO temporary_snapshot', query], calls)
+  end
+
   def test_raise_no_tables_error
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
@@ -286,6 +334,40 @@ class TestStash < Pgtk::Test
         true
       end
     end
+  end
+
+  def test_rollback_does_not_cache
+    rows = [{ 'id' => '1' }]
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      if sql.start_with?('SELECT')
+        rows.map(&:dup)
+      else
+        []
+      end
+    end
+    pool.define_singleton_method(:transaction) do |&block|
+      txrows = rows.map(&:dup)
+      tx = Object.new
+      tx.define_singleton_method(:exec) do |sql, *_args|
+        if sql.start_with?('SELECT')
+          txrows.map(&:dup)
+        else
+          txrows << { 'id' => '2' }
+          []
+        end
+      end
+      block.call(tx).tap { rows.replace(txrows) }
+    end
+    stash = Pgtk::Stash.new(pool, refill: nil, capping: nil, retirement: nil)
+    assert_raises(StandardError) do
+      stash.transaction do |tx|
+        tx.exec('INSERT INTO users VALUES (2)')
+        assert_equal(%w[1 2], tx.exec('SELECT * FROM users').map { |row| row['id'] })
+        raise(StandardError, 'rollback')
+      end
+    end
+    assert_equal(%w[1], stash.exec('SELECT * FROM users').map { |row| row['id'] })
   end
 
   def test_start
