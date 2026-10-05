@@ -3,8 +3,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
-require 'cgi'
 require 'securerandom'
+require 'uri'
 require 'yaml'
 require_relative '../lib/pgtk/wire'
 require_relative 'test__helper'
@@ -25,8 +25,9 @@ class TestWire < Pgtk::Test
       c = YAML.load_file(f)['pgsql']
       v = 'DATABASE_URL'
       ENV[v] = [
-        "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}",
-        "@#{CGI.escape(c['host'])}:#{CGI.escape(c['port'].to_s)}/#{CGI.escape(c['dbname'])}"
+        "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
+        "@#{URI.encode_uri_component(c['host'])}:#{URI.encode_uri_component(c['port'].to_s)}",
+        "/#{URI.encode_uri_component(c['dbname'])}"
       ].join
       c = Pgtk::Wire::Env.new(v).connection
       refute_nil(c)
@@ -37,7 +38,10 @@ class TestWire < Pgtk::Test
     fake_config do |f|
       c = YAML.load_file(f)['pgsql']
       v = 'DATABASE_URL_NO_PORT'
-      ENV[v] = "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}@localhost/#{CGI.escape(c['dbname'])}"
+      ENV[v] = [
+        "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
+        "@localhost/#{URI.encode_uri_component(c['dbname'])}"
+      ].join
       wire = Pgtk::Wire::Env.new(v)
       assert_includes(
         assert_raises(PG::ConnectionBad, 'must attempt connection to default port') do
@@ -53,8 +57,8 @@ class TestWire < Pgtk::Test
       v = 'DATABASE_URL_QUERY'
       name = "pgtk_#{SecureRandom.hex(4)}"
       ENV[v] = [
-        "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}",
-        "@#{CGI.escape(c['host'])}:#{c['port']}/#{CGI.escape(c['dbname'])}",
+        "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
+        "@#{URI.encode_uri_component(c['host'])}:#{c['port']}/#{URI.encode_uri_component(c['dbname'])}",
         "?application_name=#{name}"
       ].join
       assert_equal(
@@ -101,8 +105,8 @@ class TestWire < Pgtk::Test
       c = YAML.load_file(f)['pgsql']
       v = 'DATABASE_URL_PRECEDENCE'
       ENV[v] = [
-        "postgres://#{CGI.escape(c['user'])}:#{CGI.escape(c['password'])}",
-        "@#{CGI.escape(c['host'])}:#{c['port']}/#{CGI.escape(c['dbname'])}",
+        "postgres://#{URI.encode_uri_component(c['user'])}:#{URI.encode_uri_component(c['password'])}",
+        "@#{URI.encode_uri_component(c['host'])}:#{c['port']}/#{URI.encode_uri_component(c['dbname'])}",
         '?application_name=from_url'
       ].join
       explicit = "pgtk_#{SecureRandom.hex(4)}"
