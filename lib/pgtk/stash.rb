@@ -265,8 +265,7 @@ class Pgtk::Stash
 
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
-    truncates = pure.scan(TRUNCATE_RE).flatten
-    tables.concat(truncates.flat_map { |list| list.split(',').map(&:strip) })
+    tables.concat(truncated_tables(pure))
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
@@ -289,6 +288,10 @@ class Pgtk::Stash
       affected.each { |t| @stash[:table_inflight][t].decrement }
       raise
     end
+  end
+
+  def truncated_tables(pure)
+    pure.scan(TRUNCATE_RE).flatten.flat_map { |list| list.split(',').map(&:strip) }
   end
 
   def select(pure, params, result)
