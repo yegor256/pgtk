@@ -49,7 +49,10 @@ class Pgtk::Stash
   ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
-  TRUNCATE_RE = Regexp.new("(?<=^|\\s)TRUNCATE\\s+(?:TABLE\\s+)?(?:ONLY\\s+)?((?:#{IDENT}\\s*,\\s*)*#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
+  TRUNCATE_RE = /
+    (?<=^|\s)TRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?
+    ((?:#{IDENT}\s*,\s*)*#{IDENT})(?=[^a-z0-9_]|$)
+  /ix
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
