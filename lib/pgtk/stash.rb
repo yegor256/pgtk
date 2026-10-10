@@ -43,14 +43,15 @@ class Pgtk::Stash
 
   IDENT = '[a-z_][a-z0-9_]*'
 
+  SCHEMA = "(?:#{IDENT}\\s*[.]\\s*)?".freeze
   ALTS = [
     'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
-  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s#{SCHEMA}(#{IDENT})(?=[^a-z0-9_]|$)")
+  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?#{SCHEMA}(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?#{SCHEMA}(#{IDENT})(?=\\s|;|$)")
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
@@ -58,8 +59,10 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP|NEXTVAL|CURRVAL|SETVAL)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :SELECT_INTO_RE
+  private_constant(
+    :MODS, :ALTS, :IDENT, :SCHEMA, :MODS_RE, :WITH_RE,
+    :ALTS_RE, :READS_RE, :SELECT_INTO_RE, :NONDETERMINISTIC
+  )
 
   # Initialize a new Stash with query caching.
   #
