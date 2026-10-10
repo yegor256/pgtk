@@ -38,8 +38,8 @@ class Pgtk::Stash
     INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK
     REINDEX TRUNCATE CREATE ALTER DROP SET START CALL REFRESH MERGE
   ].freeze
-  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
-  WITH_RE = /\AWITH(\s|$)/
+  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)", Regexp::IGNORECASE)
+  WITH_RE = /\AWITH(\s|$)/i
 
   IDENT = '[a-z_][a-z0-9_]*'
 
@@ -47,10 +47,10 @@ class Pgtk::Stash
     'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\s)(?:FROM|JOIN)\s(?:ONLY\s+)?(#{IDENT})(?=\s|;|$)", Regexp::IGNORECASE)
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
@@ -149,7 +149,7 @@ class Pgtk::Stash
     pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
     if MODS_RE.match?(pure) || SELECT_INTO_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result)
-    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
+    elsif /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(scanned(pure, READS_RE)))
       @pool.exec(pure, params, result)
     else
       select(pure, params, result)
@@ -259,8 +259,15 @@ class Pgtk::Stash
     items
   end
 
+  def scanned(sql, regex)
+    found = sql.scan(regex).flatten
+    found.map!(&:downcase)
+    found.uniq!
+    found
+  end
+
   def modify(pure, params, result)
-    tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
+    tables = scanned(pure, ALTS_RE) + scanned(pure, SELECT_INTO_RE)
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
@@ -290,8 +297,7 @@ class Pgtk::Stash
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-      tables = pure.scan(READS_RE).flatten
-      tables.uniq!
+      tables = scanned(pure, READS_RE)
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
       cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
@@ -488,8 +494,7 @@ class Pgtk::Stash
   end
 
   def replenish(query)
-    tables = query.scan(READS_RE).flatten
-    tables.uniq!
+    tables = scanned(query, READS_RE)
     pinned = nil
     snapshot =
       @entrance.with_read_lock do
