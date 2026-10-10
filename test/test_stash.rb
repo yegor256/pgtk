@@ -292,6 +292,18 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_preserves_whitespace_inside_sql_literals
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      [{ 'value' => 'a   b' }]
+    end
+    query = "SELECT 'a   b' AS value FROM book"
+    assert_equal('a   b', Pgtk::Stash.new(pool).exec(query).first['value'])
+    assert_equal([query], calls)
+  end
+
   def test_invalidates_table_created_by_select_into
     pool = Object.new
     calls = []
