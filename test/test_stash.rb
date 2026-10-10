@@ -104,6 +104,22 @@ class TestStash < Pgtk::Test
     assert_equal(2, calls, 'sequence functions must not be served from the read cache')
   end
 
+  def test_truncate_invalidates_all_tables
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM second_table'
+    stash.exec(query)
+    stash.exec(query)
+    stash.exec('TRUNCATE first_table, second_table')
+    stash.exec(query)
+    assert_equal(3, calls, 'TRUNCATE must invalidate cached queries for every table')
+  end
+
   def test_select_with_keyword_in_string
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

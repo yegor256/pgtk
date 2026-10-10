@@ -49,6 +49,10 @@ class Pgtk::Stash
   ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
+  TRUNCATE_RE = /
+    (?<=^|\s)TRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?
+    ((?:#{IDENT}\s*,\s*)*#{IDENT})(?=[^a-z0-9_]|$)
+  /ix
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
 
@@ -59,7 +63,7 @@ class Pgtk::Stash
   /ix
 
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :SELECT_INTO_RE
+  private_constant :SELECT_INTO_RE, :TRUNCATE_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -261,6 +265,7 @@ class Pgtk::Stash
 
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
+    tables.concat(truncations(pure))
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
@@ -283,6 +288,10 @@ class Pgtk::Stash
       affected.each { |t| @stash[:table_inflight][t].decrement }
       raise
     end
+  end
+
+  def truncations(pure)
+    pure.scan(TRUNCATE_RE).flatten.flat_map { |list| list.split(',').map(&:strip) }
   end
 
   def select(pure, params, result)
