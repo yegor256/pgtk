@@ -48,6 +48,9 @@ class Pgtk::Stash
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  DROP_RE = /
+    (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
+  /ix
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
   READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
@@ -59,7 +62,7 @@ class Pgtk::Stash
   /ix
 
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :SELECT_INTO_RE
+  private_constant :DROP_RE, :SELECT_INTO_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -261,6 +264,8 @@ class Pgtk::Stash
 
   def modify(pure, params, result)
     tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
+    dropped = pure.match(DROP_RE)
+    tables.concat(dropped[1].scan(/[a-z_][a-z0-9_]*/o)) if dropped
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
