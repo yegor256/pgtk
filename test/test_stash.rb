@@ -284,6 +284,51 @@ class TestStash < Pgtk::Test
     end
   end
 
+  def test_caches_and_invalidates_quoted_table_names
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM "Accounts"'
+    first = stash.exec(query)
+    assert_same(first, stash.exec(query))
+    stash.exec('INSERT INTO "Accounts" (id) VALUES (1)')
+    refute_same(first, stash.exec(query))
+    assert_equal(3, calls)
+  end
+
+  def test_tracks_comma_tables
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT a.id, b.id FROM accounts a, profiles b'
+    stash.exec(query)
+    stash.exec('INSERT INTO profiles (id) VALUES (1)')
+    stash.exec(query)
+    assert_equal(3, calls)
+  end
+
+  def test_does_not_cache_data_modifying_cte
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'WITH source AS (SELECT 1 AS id)INSERT INTO target (id) SELECT id FROM source'
+    stash.exec(query)
+    stash.exec(query)
+    assert_equal(2, calls)
+  end
+
   def test_query_with_semicolon
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)

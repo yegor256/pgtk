@@ -41,16 +41,22 @@ class Pgtk::Stash
   MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
   WITH_RE = /\AWITH(\s|$)/
 
-  IDENT = '[a-z_][a-z0-9_]*'
+  IDENT = '(?:[a-z_][a-z0-9_]*|"[^"]+")'
 
   ALTS = [
     'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|[\\s)])(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|,|;|$)")
+  CLAUSE_RE = /
+    (?:\bFROM|\bJOIN)\s+
+    (.+?)
+    (?=\b(?:WHERE|GROUP|ORDER|LIMIT|OFFSET|HAVING|UNION|RETURNING|ON|JOIN)\b|;|\z)
+  /imx
+  TABLE_RE = /(?:\A|,)\s*(?:ONLY\s+)?(#{IDENT})(?![a-z0-9_]|\s*\()/i
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
@@ -59,7 +65,7 @@ class Pgtk::Stash
   /ix
 
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :SELECT_INTO_RE
+  private_constant :CLAUSE_RE, :TABLE_RE, :SELECT_INTO_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -290,14 +296,21 @@ class Pgtk::Stash
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-      tables = pure.scan(READS_RE).flatten
-      tables.uniq!
-      marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
+      found = tables(pure)
+      marks = found.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
-      cache(pure, key, result, ret, tables, marks) unless pure.match?(NONDETERMINISTIC)
+      cache(pure, key, result, ret, found, marks) unless pure.match?(NONDETERMINISTIC)
     end
     bump(pure, key) if @stash.dig(:queries, pure, key)
     ret
+  end
+
+  def tables(query)
+    names = query.scan(READS_RE).flatten
+    query.scan(CLAUSE_RE) do |clause|
+      names.concat(clause.first.scan(TABLE_RE).flatten)
+    end
+    names.uniq
   end
 
   def invalidate!
@@ -488,8 +501,7 @@ class Pgtk::Stash
   end
 
   def replenish(query)
-    tables = query.scan(READS_RE).flatten
-    tables.uniq!
+    tables = tables(query)
     pinned = nil
     snapshot =
       @entrance.with_read_lock do
