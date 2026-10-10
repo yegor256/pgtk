@@ -59,7 +59,10 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP|NEXTVAL|CURRVAL|SETVAL)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :SCHEMA, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :SELECT_INTO_RE, :NONDETERMINISTIC
+  private_constant(
+    :MODS, :ALTS, :IDENT, :SCHEMA, :MODS_RE, :WITH_RE,
+    :ALTS_RE, :READS_RE, :SELECT_INTO_RE, :NONDETERMINISTIC
+  )
 
   # Initialize a new Stash with query caching.
   #
