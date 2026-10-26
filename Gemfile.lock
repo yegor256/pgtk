@@ -71,7 +71,7 @@ GEM
       racc (~> 1.4)
     os (1.1.4)
     parallel (2.3.0)
-    parser (3.3.12.0)
+    parser (3.3.13.0)
       ast (~> 2.4.1)
       racc
     pg (1.6.3)
@@ -109,7 +109,7 @@ GEM
     rubocop-ast (1.50.0)
       parser (>= 3.3.7.2)
       prism (~> 1.7)
-    rubocop-elegant (0.7.1)
+    rubocop-elegant (0.8.0)
       lint_roller (~> 1.1)
       rubocop (~> 1.75)
     rubocop-minitest (0.41.0)
