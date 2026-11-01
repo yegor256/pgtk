@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'English'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'English'
 require 'donce'
 require 'loog'
 require 'os'

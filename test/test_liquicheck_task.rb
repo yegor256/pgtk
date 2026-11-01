@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'nokogiri'
-require 'qbash'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'nokogiri'
+require 'qbash'
 require 'tmpdir'
 require_relative '../lib/pgtk/liquicheck_task'
 require_relative 'test__helper'

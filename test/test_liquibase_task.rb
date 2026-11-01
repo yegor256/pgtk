@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'rake'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require 'rake'
 require 'tmpdir'
 require 'yaml'
 require_relative '../lib/pgtk/liquibase_task'
