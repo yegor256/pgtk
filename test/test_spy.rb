@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative '../lib/pgtk/pool'
-require_relative '../lib/pgtk/spy'
 # SPDX-FileCopyrightText: Copyright (c) 2019-2026 Yegor Bugayenko
 # SPDX-License-Identifier: MIT
 
+require_relative '../lib/pgtk/pool'
+require_relative '../lib/pgtk/spy'
 require_relative 'test__helper'
 
 # Pool test.
