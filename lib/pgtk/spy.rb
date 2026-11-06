@@ -81,9 +81,9 @@ class Pgtk::Spy
   #
   # @param [String] sql The SQL query with params inside (possibly)
   # @return [Array] Result rows
-  def exec(sql, *)
+  def exec(sql, *, &)
     Time.now.then do |started|
-      @pool.exec(sql, *).tap do
+      @pool.exec(sql, *, &).tap do
         @block&.call(sql.is_a?(Array) ? sql.join(' ') : sql, Time.now - started)
       end
     end
