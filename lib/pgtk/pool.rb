@@ -246,7 +246,8 @@ class Pgtk::Pool
   private
 
   def connect
-    conn = @pool.pop
+    original = @pool.pop
+    conn = original
     begin
       reason = cause(conn) || stale(conn)
       if reason
@@ -269,7 +270,7 @@ class Pgtk::Pool
       end
     ensure
       conn.instance_variable_set(:@pgtk_last_used, Time.now) if @idle && !conn.finished?
-      @pool.push(conn)
+      @pool.push(conn, replaced: original)
     end
   end
 
