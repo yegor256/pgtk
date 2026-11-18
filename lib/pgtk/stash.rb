@@ -43,17 +43,20 @@ class Pgtk::Stash
 
   IDENT = '[a-z_][a-z0-9_]*'
 
+  REF = "(?:\"([^\"]+)\"|(#{IDENT}))".freeze
+
   ALTS = [
     'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s#{REF}(?=[^a-z0-9_]|$)")
   DROP_RE = /
-    (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
+    (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{REF}\s*,\s*)*#{REF})(?=\s*(?:CASCADE|RESTRICT|;|$))
   /ix
-  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
+  SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?#{REF}(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?#{REF}(?=\\s|;|$)")
+  REFS_RE = Regexp.new(REF)
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
@@ -61,8 +64,8 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP|NEXTVAL|CURRVAL|SETVAL)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
-  private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :DROP_RE, :SELECT_INTO_RE
+  private_constant :MODS, :ALTS, :IDENT, :REF, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
+  private_constant :DROP_RE, :SELECT_INTO_RE, :REFS_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -268,13 +271,19 @@ class Pgtk::Stash
   end
 
   def uncacheable?(pure)
-    /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
+    /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(refs(pure, READS_RE)))
+  end
+
+  def refs(text, regexp)
+    tables = []
+    text.scan(regexp) { |match| match.each { |name| tables << name if name } }
+    tables
   end
 
   def modify(pure, params, result, &)
-    tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
+    tables = refs(pure, ALTS_RE) + refs(pure, SELECT_INTO_RE)
     dropped = pure.match(DROP_RE)
-    tables.concat(dropped[1].scan(/[a-z_][a-z0-9_]*/o)) if dropped
+    tables.concat(refs(dropped[1], REFS_RE)) if dropped
     tables.uniq!
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
@@ -304,7 +313,7 @@ class Pgtk::Stash
     key = immutable(params)
     ret = @stash.dig(:queries, pure, key, :ret)
     if ret.nil? || @stash.dig(:queries, pure, key, :stale)
-      tables = pure.scan(READS_RE).flatten
+      tables = refs(pure, READS_RE)
       tables.uniq!
       marks = tables.to_h { |t| [t, @stash[:table_mod][t]] }
       ret = @pool.exec(pure, params, result)
@@ -502,7 +511,7 @@ class Pgtk::Stash
   end
 
   def replenish(query)
-    tables = query.scan(READS_RE).flatten
+    tables = refs(query, READS_RE)
     tables.uniq!
     pinned = nil
     snapshot =
