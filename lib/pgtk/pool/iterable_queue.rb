@@ -33,22 +33,35 @@ class Pgtk::Pool::IterableQueue
     @condition = ConditionVariable.new
   end
 
-  def push(item)
+  # Push an item back to the queue, making its slot available again.
+  #
+  # When the pushed +item+ is a brand-new object that must take the place
+  # of an older one (a renewed database connection, for example), pass the
+  # object it replaces as +replaced+: the new item then lands exactly in
+  # the slot the old one occupied. Without this hint an unknown item cannot
+  # be matched to a slot, and the queue refuses it instead of guessing,
+  # since guessing could evict an item another thread is still using.
+  #
+  # @param [Object] item The item to return to the queue
+  # @param [Object, nil] replaced The item this one takes the place of, or +nil+
+  # @raise [StandardError] If the queue is full and +item+ occupies no slot
+  def push(item, replaced: nil)
     @mutex.synchronize do
-      if @items.size < @size
+      index = @items.index(item)
+      if index.nil? && replaced
+        index = @items.index(replaced)
+        @items[index] = item if index
+      end
+      if index.nil?
+        if @items.size >= @size
+          raise(StandardError, "The queue is full, while #{item.inspect} does not occupy any slot in it")
+        end
         @items << item
         @taken << false
-        @free << (@items.size - 1)
-      else
-        index = @items.index(item)
-        if index.nil?
-          index = @taken.index(true)
-          raise(StandardError, 'No taken slot found') if index.nil?
-          @items[index] = item
-        end
-        @taken[index] = false
-        @free << index
+        index = @items.size - 1
       end
+      @taken[index] = false
+      @free << index
       @condition.signal
     end
   end
