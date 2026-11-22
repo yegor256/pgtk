@@ -157,7 +157,7 @@ class Pgtk::Stash
   # @param [Integer] result Result format code
   # @return [PG::Result] Query result object
   def exec(query, params = [], result = 0, &)
-    pure = (query.is_a?(Array) ? query.join(' ') : query).gsub(/\s+/, ' ').strip
+    pure = normalize(query.is_a?(Array) ? query.join(' ') : query)
     if MODS_RE.match?(pure) || SELECT_INTO_RE.match?(pure) || (WITH_RE.match?(pure) && ALTS_RE.match?(pure))
       modify(pure, params, result, &)
     elsif block_given? || uncacheable?(pure)
@@ -272,6 +272,20 @@ class Pgtk::Stash
 
   def uncacheable?(pure)
     /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(refs(pure, READS_RE)))
+  end
+
+  # Collapse whitespace runs to single spaces, but only outside
+  # double-quoted identifiers: inside the quotes, whitespace is
+  # significant and the contents must reach the pool verbatim, or a
+  # quoted name like "Account  History" would silently turn into
+  # another (possibly non-existing) table. A doubled double quote
+  # inside the span ("") stands for a literal quote and is preserved
+  # as part of the span too.
+  #
+  # @param [String] sql Raw SQL text
+  # @return [String] SQL with whitespace normalized outside quoted spans
+  def normalize(sql)
+    sql.gsub(/"(?:[^"]|"")*"|\s+/) { |span| span.start_with?('"') ? span : ' ' }.strip
   end
 
   def refs(text, regexp)

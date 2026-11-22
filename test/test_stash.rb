@@ -323,6 +323,48 @@ class TestStash < Pgtk::Test
     assert_equal(2, calls, 'each SELECT on a volatile quoted table must hit the pool')
   end
 
+  def test_quoted_identifier_reaches_pool_verbatim
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    query = 'SELECT * FROM "Account  History"'
+    Pgtk::Stash.new(pool).exec(query)
+    assert_equal(
+      [query], calls,
+      'the SQL sent to the pool must keep the significant whitespace inside the quoted identifier'
+    )
+  end
+
+  def test_spaced_quoted_write_invalidates_cache
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM "Account  History"'
+    stash.exec(query)
+    stash.exec('INSERT INTO "Account  History" VALUES (1)')
+    stash.exec(query)
+    assert_equal(
+      [query, 'INSERT INTO "Account  History" VALUES (1)', query], calls,
+      'a write into a quoted identifier with internal whitespace must invalidate the cached SELECT on it'
+    )
+    assert_includes(
+      stash.instance_variable_get(:@stash)[:tables], 'Account  History',
+      'the tracked table key must keep the internal whitespace of the quoted identifier'
+    )
+  end
+
+  def test_normalizes_whitespace_outside_quotes
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    Pgtk::Stash.new(pool).exec("SELECT\n\t*   FROM    accounts")
+    assert_equal(
+      ['SELECT * FROM accounts'], calls,
+      'whitespace outside quoted identifiers must still collapse to single spaces'
+    )
+  end
+
   def test_caching_with_params
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
