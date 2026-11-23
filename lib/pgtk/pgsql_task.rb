@@ -134,7 +134,7 @@ class Pgtk::PgsqlTask < Rake::TaskLib
       '--health-interval', '1s',
       '--health-timeout', '2s',
       '--health-retries', '10',
-      'postgres:18.1',
+      'postgres:18.7',
       @config.map { |k, v| "-c #{Shellwords.escape("#{k}=#{v}")}" },
       stdout:
     ).scan(/[a-f0-9]+\Z/).first

@@ -52,8 +52,6 @@ class TestLiquibaseTask < Pgtk::Test
       Pgtk::LiquibaseTask.new(:liquibase) do |t|
         t.master = File.join(__dir__, '../test-resources/master.xml')
         t.yaml = File.join(dir, 'xxx.yml')
-        t.postgresql = '42.7.1'
-        t.liquibase = '4.25.1'
         t.quiet = true
       end
       Rake::Task['liquibase'].invoke
