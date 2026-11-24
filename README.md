@@ -22,7 +22,7 @@ First of all, on top of
 [Bundler](https://bundler.io/)
 you need to have
 [PostgreSQL](https://www.postgresql.org/),
-[Java 8+](https://java.com/en/download/), and
+[Java 17+](https://java.com/en/download/), and
 [Maven 3.2+](https://maven.apache.org/) installed.
 In Ubuntu 16+ this should be enough:
 
@@ -77,9 +77,9 @@ Pgtk::LiquibaseTask.new liquibase: :pgsql do |t|
   # List of contexts or empty if all:
   t.contexts = '!test'
   # Overwriting default version of PostgreSQL server:
-  t.postgresql = '42.7.0'
+  t.postgresql = '42.7.15'
   # Overwriting default version of Liquibase:
-  t.liquibase = '3.2.2'
+  t.liquibase = '5.0.4'
 end
 ```
 

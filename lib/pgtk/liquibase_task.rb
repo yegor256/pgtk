@@ -31,8 +31,8 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
     @name = args.shift || :liquibase
     @quiet = false
     @contexts = ''
-    @liquibase = '3.2.2'
-    @postgresql = '42.7.0'
+    @liquibase = '5.0.4'
+    @postgresql = '42.7.15'
     desc('Deploy Liquibase changes to the running PostgreSQL server') unless ::Rake.application.last_description
     task(name, *args) do |_, task_args|
       RakeFileUtils.verbose(true) do
@@ -160,7 +160,7 @@ class Pgtk::LiquibaseTask < Rake::TaskLib
 
   def dockerdump(yml, host, password)
     donce(
-      image: 'postgres:18.1',
+      image: 'postgres:18.7',
       args: OS.mac? ? '' : '--network=host',
       env: { 'PGPASSWORD' => password },
       command: [
