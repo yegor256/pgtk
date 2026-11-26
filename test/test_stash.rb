@@ -149,6 +149,30 @@ class TestStash < Pgtk::Test
     )
   end
 
+  def test_lowercase_writes_invalidate_cache
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'select count(*) from book'
+    stash.exec(query)
+    [
+      'insert into book (title) values ($1)',
+      'update book set title = $1',
+      'delete from book'
+    ].each { |statement| stash.exec(statement, ['x']).tap { stash.exec(query) } }
+    assert_equal(
+      [
+        query,
+        'insert into book (title) values ($1)', query,
+        'update book set title = $1', query,
+        'delete from book', query
+      ],
+      calls,
+      'lowercase writes must bypass the cache and invalidate the cached read'
+    )
+  end
+
   def test_caching
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
