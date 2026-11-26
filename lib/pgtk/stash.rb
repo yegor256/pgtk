@@ -38,8 +38,8 @@ class Pgtk::Stash
     INSERT DELETE UPDATE LOCK VACUUM TRANSACTION COMMIT ROLLBACK
     REINDEX TRUNCATE CREATE ALTER DROP SET START CALL REFRESH MERGE
   ].freeze
-  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)")
-  WITH_RE = /\AWITH(\s|$)/
+  MODS_RE = Regexp.new("\\A(#{MODS.join('|')})(\\s|$)", Regexp::IGNORECASE)
+  WITH_RE = /\AWITH(\s|$)/i
 
   IDENT = '[a-z_][a-z0-9_]*'
 
@@ -47,13 +47,13 @@ class Pgtk::Stash
     'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
-  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
+  ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
   DROP_RE = /
     (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
   /ix
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
-  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)")
+  READS_RE = Regexp.new("(?<=^|\\s)(?:FROM|JOIN)\\s(?:ONLY\\s+)?(#{IDENT})(?=\\s|;|$)", Regexp::IGNORECASE)
 
   NONDETERMINISTIC = /
     \b(?:NOW|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|
