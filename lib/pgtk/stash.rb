@@ -61,8 +61,13 @@ class Pgtk::Stash
     CLOCK_TIMESTAMP|NEXTVAL|CURRVAL|SETVAL)(?:\s*\(|(?=[^a-z0-9_]|$))
   /ix
 
+  LOCKS_RE = /
+    \bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b |
+    \bFOR\s+(?:KEY\s+)?SHARE\b
+  /ix
+
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :DROP_RE, :SELECT_INTO_RE
+  private_constant :DROP_RE, :SELECT_INTO_RE, :LOCKS_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -268,7 +273,9 @@ class Pgtk::Stash
   end
 
   def uncacheable?(pure)
-    /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
+    LOCKS_RE.match?(pure) ||
+      /(^|\s)pg_[a-z_]+\(/.match?(pure) ||
+      (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
   end
 
   def modify(pure, params, result, &)

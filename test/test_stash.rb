@@ -323,6 +323,35 @@ class TestStash < Pgtk::Test
     assert_equal([query, 'SELECT 1 AS value INTO temporary_snapshot', query], calls)
   end
 
+  def test_does_not_cache_locking_select
+    [
+      'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+      'SELECT * FROM orders WHERE id = $1 FOR NO KEY UPDATE',
+      'SELECT * FROM orders WHERE id = $1 FOR SHARE',
+      'SELECT * FROM orders WHERE id = $1 FOR KEY SHARE',
+      'select * from orders where id = $1 for update'
+    ].each do |query|
+      pool = Object.new
+      calls = []
+      pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+      stash = Pgtk::Stash.new(pool)
+      stash.exec(query, [1])
+      stash.exec(query, [1])
+      assert_equal([query, query], calls, "a locking SELECT must reach the pool every time: #{query}")
+    end
+  end
+
+  def test_caches_select_with_lock_keyword_in_param
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM book WHERE note = $1'
+    stash.exec(query, ['for update'])
+    stash.exec(query, ['for update'])
+    assert_equal([query], calls, 'a lock keyword in a parameter value must not disable caching')
+  end
+
   def test_raise_no_tables_error
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
