@@ -95,7 +95,13 @@ class Pgtk::Spy
   # @return [Object] Result of the block
   def transaction
     @pool.transaction do |t|
-      yield(Pgtk::Spy.new(t, &@block))
+      report('START TRANSACTION')
+      begin
+        yield(Pgtk::Spy.new(t, &@block)).tap { report('COMMIT') }
+      rescue StandardError
+        report('ROLLBACK')
+        raise
+      end
     end
   end
 
@@ -108,5 +114,11 @@ class Pgtk::Spy
     @pool.session do |t|
       yield(Pgtk::Spy.new(t, &@block))
     end
+  end
+
+  private
+
+  def report(sql)
+    @block&.call(sql, 0.0)
   end
 end
