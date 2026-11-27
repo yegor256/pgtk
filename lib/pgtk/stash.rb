@@ -44,12 +44,17 @@ class Pgtk::Stash
   IDENT = '[a-z_][a-z0-9_]*'
 
   ALTS = [
-    'UPDATE', 'INSERT INTO', 'DELETE FROM', 'TRUNCATE', 'ALTER TABLE',
+    'UPDATE', 'INSERT INTO', 'DELETE FROM', 'ALTER TABLE',
     'DROP TABLE', 'MERGE INTO', 'REFRESH MATERIALIZED VIEW'
   ].freeze
   ALTS_RE = Regexp.new("(?<=^|\\s)(?:#{ALTS.join('|')})\\s(#{IDENT})(?=[^a-z0-9_]|$)")
   DROP_RE = /
     (?:^|\s)DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?((?:#{IDENT}\s*,\s*)*#{IDENT})(?=\s*(?:CASCADE|RESTRICT|;|$))
+  /ix
+  TRUNCATE_RE = /
+    (?:^|\s)TRUNCATE\s+(?:TABLE\s+)?
+    ((?:(?:ONLY\s+)?#{IDENT}\s*\*?\s*,\s*)*(?:ONLY\s+)?#{IDENT})\s*\*?
+    (?=\s*(?:RESTART\s+IDENTITY|CONTINUE\s+IDENTITY|CASCADE|RESTRICT|;|$))
   /ix
   SELECT_INTO_RE = Regexp.new("\\bINTO\\s+(?:TEMP(?:ORARY)?\\s+)?(#{IDENT})(?=[^a-z0-9_]|$)", Regexp::IGNORECASE)
 
@@ -62,7 +67,7 @@ class Pgtk::Stash
   /ix
 
   private_constant :MODS, :ALTS, :IDENT, :MODS_RE, :WITH_RE, :ALTS_RE, :READS_RE, :NONDETERMINISTIC
-  private_constant :DROP_RE, :SELECT_INTO_RE
+  private_constant :DROP_RE, :TRUNCATE_RE, :SELECT_INTO_RE
 
   # Initialize a new Stash with query caching.
   #
@@ -271,11 +276,18 @@ class Pgtk::Stash
     /(^|\s)pg_[a-z_]+\(/.match?(pure) || (!@volatile.empty? && @volatile.intersect?(pure.scan(READS_RE).flatten))
   end
 
-  def modify(pure, params, result, &)
+  # Derive the names of all tables a modifying statement touches.
+  def targets(pure)
     tables = pure.scan(ALTS_RE).flatten + pure.scan(SELECT_INTO_RE).flatten
     dropped = pure.match(DROP_RE)
     tables.concat(dropped[1].scan(/[a-z_][a-z0-9_]*/o)) if dropped
-    tables.uniq!
+    truncated = pure.match(TRUNCATE_RE)
+    tables.concat(truncated[1].scan(/(?:ONLY\s+)?(#{IDENT})/io).flatten) if truncated
+    tables.uniq
+  end
+
+  def modify(pure, params, result, &)
+    tables = targets(pure)
     affected = (tables + tables.flat_map { |t| @cascades&.fetch(t, []) || [] }).uniq
     affected.each { |t| @stash[:table_inflight][t].increment }
     begin

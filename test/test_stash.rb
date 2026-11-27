@@ -307,6 +307,21 @@ class TestStash < Pgtk::Test
     assert_equal([query, 'DROP TABLE first_table, second_table', query], calls)
   end
 
+  def test_invalidates_all_tables_in_multi_truncate
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) do |sql, *_args|
+      calls << sql
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM second_table'
+    stash.exec(query)
+    stash.exec('TRUNCATE first_table, second_table')
+    stash.exec(query)
+    assert_equal([query, 'TRUNCATE first_table, second_table', query], calls)
+  end
+
   def test_invalidates_table_created_by_select_into
     pool = Object.new
     calls = []
