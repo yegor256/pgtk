@@ -97,7 +97,7 @@ GEM
     rack (3.2.9)
     rainbow (3.1.1)
     rake (13.4.2)
-    random-port (0.8.2)
+    random-port (0.8.3)
       tago (~> 0.0)
     regexp_parser (2.13.4)
     rexml (3.4.4)
