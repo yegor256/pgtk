@@ -257,6 +257,114 @@ class TestStash < Pgtk::Test
     refute_includes(tables, 'ONLY')
   end
 
+  def test_caches_select_from_quoted_table
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT * FROM "Accounts"'
+    assert_same(stash.exec(query), stash.exec(query), 'a SELECT from a quoted table must be cached')
+    assert_equal(1, calls, 'the second SELECT from a quoted table must not hit the pool')
+  end
+
+  def test_tracks_quoted_table_identifier
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |_sql, *_args| [] }
+    stash = Pgtk::Stash.new(pool)
+    stash.exec('SELECT * FROM "Accounts"')
+    tables = stash.instance_variable_get(:@stash)[:tables]
+    assert_includes(tables, 'Accounts', 'the quoted table must be tracked by its bare name')
+    refute_includes(tables, '"Accounts"', 'the tracked name must not keep the quotes')
+  end
+
+  def test_write_to_quoted_table_invalidates_cache
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM "Accounts"'
+    stash.exec(query)
+    stash.exec('INSERT INTO "Accounts" VALUES (1)')
+    stash.exec(query)
+    assert_equal(
+      [query, 'INSERT INTO "Accounts" VALUES (1)', query], calls,
+      'a write into a quoted table must invalidate the cached SELECT on it'
+    )
+  end
+
+  def test_drop_quoted_table_invalidates_cache
+    pool = Object.new
+    calls = []
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM "Accounts"'
+    stash.exec(query)
+    stash.exec('DROP TABLE "Accounts"')
+    stash.exec(query)
+    assert_equal(
+      [query, 'DROP TABLE "Accounts"', query], calls,
+      'a DROP of a quoted table must invalidate the cached SELECT on it'
+    )
+  end
+
+  def test_volatile_quoted_table_is_never_cached
+    calls = 0
+    pool = Object.new
+    pool.define_singleton_method(:exec) do |*|
+      calls += 1
+      []
+    end
+    stash = Pgtk::Stash.new(pool, volatile: ['Accounts'])
+    query = 'SELECT * FROM "Accounts"'
+    refute_same(stash.exec(query), stash.exec(query), 'a volatile quoted table must never be cached')
+    assert_equal(2, calls, 'each SELECT on a volatile quoted table must hit the pool')
+  end
+
+  def test_quoted_identifier_reaches_pool_verbatim
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    query = 'SELECT * FROM "Account  History"'
+    Pgtk::Stash.new(pool).exec(query)
+    assert_equal(
+      [query], calls,
+      'the SQL sent to the pool must keep the significant whitespace inside the quoted identifier'
+    )
+  end
+
+  def test_spaced_quoted_write_invalidates_cache
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    stash = Pgtk::Stash.new(pool)
+    query = 'SELECT count(*) FROM "Account  History"'
+    stash.exec(query)
+    stash.exec('INSERT INTO "Account  History" VALUES (1)')
+    stash.exec(query)
+    assert_equal(
+      [query, 'INSERT INTO "Account  History" VALUES (1)', query], calls,
+      'a write into a quoted identifier with internal whitespace must invalidate the cached SELECT on it'
+    )
+    assert_includes(
+      stash.instance_variable_get(:@stash)[:tables], 'Account  History',
+      'the tracked table key must keep the internal whitespace of the quoted identifier'
+    )
+  end
+
+  def test_normalizes_whitespace_outside_quotes
+    calls = []
+    pool = Object.new
+    pool.define_singleton_method(:exec) { |sql, *_args| (calls << sql) && [] }
+    Pgtk::Stash.new(pool).exec("SELECT\n\t*   FROM    accounts")
+    assert_equal(
+      ['SELECT * FROM accounts'], calls,
+      'whitespace outside quoted identifiers must still collapse to single spaces'
+    )
+  end
+
   def test_caching_with_params
     fake_pool do |pool|
       stash = Pgtk::Stash.new(pool)
